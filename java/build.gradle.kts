@@ -17,6 +17,23 @@ tasks.withType<Jar> {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+tasks.register<Jar>("fatJar") {
+    archiveClassifier.set("fat")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    from(sourceSets.main.get().output)
+    
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get()
+            .filter { it.name.endsWith("jar") }
+            .filter { !it.name.contains("findbugs") }
+            .filter { !it.name.contains("jcip-annotations") }
+            .filter { !it.name.contains("slf4j") }
+            .map { zipTree(it) }
+    })
+}
+
 dependencies {
     api(libs.gson)
     implementation(libs.bundles.common)
