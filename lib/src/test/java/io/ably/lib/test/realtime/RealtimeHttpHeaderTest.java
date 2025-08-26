@@ -1,25 +1,22 @@
 package io.ably.lib.test.realtime;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import fi.iki.elonen.NanoHTTPD;
+import io.ably.lib.realtime.AblyRealtime;
+import io.ably.lib.test.common.ParameterizedTest;
+import io.ably.lib.types.AblyException;
+import io.ably.lib.types.ClientOptions;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import fi.iki.elonen.NanoHTTPD;
-import io.ably.lib.realtime.AblyRealtime;
-import io.ably.lib.test.common.ParameterizedTest;
-import io.ably.lib.transport.Defaults;
-import io.ably.lib.types.AblyException;
-import io.ably.lib.types.ClientOptions;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 /**
  * Test for correct version headers passed to websocket
@@ -84,14 +81,14 @@ public class RealtimeHttpHeaderTest extends ParameterizedTest {
              * Defaults.ABLY_VERSION_PARAM, as ultimately the request param has been derived from those values.
              */
             assertEquals("Verify correct version", requestParameters.get("v"),
-                    Collections.singletonList("1.2"));
+                    Collections.singletonList("2"));
 
-            /* Spec RTN2g
-             * This test should not directly validate version against Defaults.ABLY_LIB_VERSION, nor
-             * Defaults.ABLY_LIB_PARAM, as ultimately the request param has been derived from those values.
+            /* Spec RSC7d3
+             * This test should not directly validate version against Defaults.ABLY_AGENT_VERSION, nor
+             * Defaults.ABLY_AGENT_PARAM, as ultimately the request param has been derived from those values.
              */
-            assertEquals("Verify correct lib version", requestParameters.get("lib"),
-                    Collections.singletonList("java-1.2.3"));
+            assertEquals("Verify correct lib version", requestParameters.get("agent"),
+                    Collections.singletonList("ably-java/1.2.54 jre/" + System.getProperty("java.version")));
 
             /* Spec RTN2a */
             assertEquals("Verify correct format", requestParameters.get("format"),

@@ -3,19 +3,19 @@ package io.ably.lib.push;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.iid.InstanceIdResult;
+
+import androidx.annotation.VisibleForTesting;
+import com.google.firebase.messaging.FirebaseMessaging;
+
+import java.util.WeakHashMap;
+
 import io.ably.lib.rest.AblyRest;
 import io.ably.lib.types.AblyException;
 import io.ably.lib.types.Callback;
+import io.ably.lib.types.ClientOptions;
 import io.ably.lib.types.ErrorInfo;
 import io.ably.lib.types.RegistrationToken;
 import io.ably.lib.util.Log;
-
-import java.util.WeakHashMap;
 
 public class ActivationContext {
     public ActivationContext(Context context) {
@@ -31,7 +31,9 @@ public class ActivationContext {
     public synchronized LocalDevice getLocalDevice() {
         if(localDevice == null) {
             Log.v(TAG, "getLocalDevice(): creating new instance and returning that");
-            localDevice = new LocalDevice(this);
+            Storage storage = ably != null ? ably.options.localStorage : null;
+
+            localDevice = new LocalDevice(this, storage);
         } else {
             Log.v(TAG, "getLocalDevice(): returning existing instance");
         }
@@ -63,6 +65,8 @@ public class ActivationContext {
             Log.v(TAG, "getAbly(): returning existing Ably instance");
             return ably;
         } else {
+            // In this case, we received a new FCM token while the app is offline,
+            // so we have to initialize the Ably client to send it to the server.
             Log.v(TAG, "getAbly(): creating new Ably instance");
         }
 
@@ -72,7 +76,19 @@ public class ActivationContext {
             throw AblyException.fromErrorInfo(new ErrorInfo("Unable to get Ably library instance; no device identity token", 40000, 400));
         }
         Log.v(TAG, "getAbly(): returning Ably instance using deviceIdentityToken");
+        // TODO: We need to persist Ably client options such as the environment with `deviceIdentityToken` and use these options during initialization.
         return (ably = new AblyRest(deviceIdentityToken));
+    }
+
+    /**
+     * @return AblyRest instance with device identity token auth. We use this instance to perform
+     * deregistration calls in push activation flow.
+     */
+    AblyRest getDeviceIdentityTokenBasedAblyClient(String deviceIdentityToken) throws AblyException {
+        ClientOptions clientOptions = ably.options.copy();
+        clientOptions.clearAuthOptions();
+        clientOptions.token = deviceIdentityToken;
+        return new AblyRest(clientOptions);
     }
 
     public boolean setClientId(String clientId, boolean propagateGotPushDeviceDetails) {
@@ -113,6 +129,10 @@ public class ActivationContext {
         getActivationStateMachine().handleEvent(new ActivationStateMachine.GotPushDeviceDetails());
     }
 
+    /**
+     * Should be used in tests only
+     */
+    @VisibleForTesting
     public void reset() {
         Log.v(TAG, "reset()");
 
@@ -151,20 +171,15 @@ public class ActivationContext {
 
     protected void getRegistrationToken(final Callback<String> callback) {
         Log.v(TAG, "getRegistrationToken(): callback=" + callback);
-        FirebaseInstanceId.getInstance().getInstanceId()
-                .addOnCompleteListener(new OnCompleteListener<InstanceIdResult>() {
-                    @Override
-                    public void onComplete(Task<InstanceIdResult> task) {
-                        Log.v(TAG, "getRegistrationToken(): firebase called onComplete(): task=" + task);
-                        if(task.isSuccessful()) {
-                            /* Get new Instance ID token */
-                            String token = task.getResult().getToken();
-                            callback.onSuccess(token);
-                        } else {
-                            callback.onError(ErrorInfo.fromThrowable(task.getException()));
-                        }
-                    }
-                });
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            Log.v(TAG, "getRegistrationToken(): FirebaseMessaging#getToken() completed: task=" + task);
+            if(task.isSuccessful()) {
+                String registrationToken = task.getResult();
+                callback.onSuccess(registrationToken);
+            } else {
+                callback.onError(ErrorInfo.fromThrowable(task.getException()));
+            }
+        });
     }
 
     public static void setActivationContext(Context applicationContext, ActivationContext activationContext) {
@@ -179,6 +194,6 @@ public class ActivationContext {
     protected final SharedPreferences prefs;
     protected final Context context;
 
-    private static WeakHashMap<Context, ActivationContext> activationContexts = new WeakHashMap<Context, ActivationContext>();
+    private static final WeakHashMap<Context, ActivationContext> activationContexts = new WeakHashMap<>();
     private static final String TAG = ActivationContext.class.getName();
 }

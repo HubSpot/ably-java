@@ -1,0 +1,52 @@
+name: Manual Release to Maven Central
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-on-release:
+    runs-on: ubuntu-latest
+    if: github.repository == 'ably/ably-java'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract tag
+        id: tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Read VERSION_NAME from gradle.properties
+        id: version
+        run: |
+          VERSION_NAME=$(grep '^VERSION_NAME' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: Compare version with tag
+        run: |
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "VERSION ($VERSION) does not match tag ($TAG)."
+            exit 1
+          fi
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Publish and release to Maven Central
+        run: ./gradlew publishAndReleaseToMavenCentral
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.SONATYPE_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.SONATYPE_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}

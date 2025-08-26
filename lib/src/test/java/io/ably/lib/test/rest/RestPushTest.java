@@ -1,25 +1,12 @@
 package io.ably.lib.test.rest;
 
 import com.google.gson.JsonObject;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
-
-import org.junit.*;
-import org.junit.rules.Timeout;
-
-import java.util.Arrays;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
-
 import io.ably.lib.debug.DebugOptions;
+import io.ably.lib.push.PushBase.ChannelSubscription;
 import io.ably.lib.realtime.AblyRealtime;
 import io.ably.lib.realtime.CompletionListener;
 import io.ably.lib.rest.AblyRest;
 import io.ably.lib.rest.DeviceDetails;
-import io.ably.lib.push.PushBase.ChannelSubscription;
 import io.ably.lib.test.common.Helpers;
 import io.ably.lib.test.common.Helpers.CompletionWaiter;
 import io.ably.lib.test.common.Helpers.MessageWaiter;
@@ -31,6 +18,19 @@ import io.ably.lib.types.Callback;
 import io.ably.lib.types.PaginatedResult;
 import io.ably.lib.types.Param;
 import io.ably.lib.util.JsonUtils;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
+
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
+
+import static org.junit.Assert.assertEquals;
 
 public class RestPushTest extends ParameterizedTest {
     private static AblyRest rest;
@@ -242,7 +242,7 @@ public class RestPushTest extends ParameterizedTest {
                         new Param("transportType", "ablyChannel"),
                         new Param("channel", "pushenabled:push_admin_publish-ok"),
                         new Param("ablyKey", testVars.keys[0].keyStr),
-                        new Param("ablyUrl", String.format("%s%s:%d", rest.httpCore.scheme, rest.httpCore.getPrimaryHost(), rest.httpCore.port)),
+                        new Param("ablyUrl", String.format(Locale.ROOT, "%s%s:%d", rest.httpCore.scheme, rest.httpCore.getPrimaryHost(), rest.httpCore.port)),
                 },
                 testPayload,
                 null));
@@ -496,7 +496,7 @@ public class RestPushTest extends ParameterizedTest {
             private final Param[] params;
             private final DeviceDetails[] expectedRemoved;
 
-            public TestCase(String name, String expectedError, Param[] params, DeviceDetails[] expectedRemoved) {
+            TestCase(String name, String expectedError, Param[] params, DeviceDetails[] expectedRemoved) {
                 super(name, expectedError);
                 this.params = Param.push(params, "fullWait", "true");
                 this.expectedRemoved = expectedRemoved;
@@ -746,7 +746,7 @@ public class RestPushTest extends ParameterizedTest {
             private final Param[] params;
             private final ChannelSubscription[] expectedRemoved;
 
-            public TestCase(String name, String expectedError, Param[] params, ChannelSubscription[] expectedRemoved) {
+            TestCase(String name, String expectedError, Param[] params, ChannelSubscription[] expectedRemoved) {
                 super(name, expectedError);
                 this.params = Param.push(params, "fullWait", "true");
                 this.expectedRemoved = expectedRemoved;

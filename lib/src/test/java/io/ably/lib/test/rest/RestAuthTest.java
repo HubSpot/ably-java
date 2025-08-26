@@ -1,29 +1,11 @@
 package io.ably.lib.test.rest;
 
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
-import java.net.SocketTimeoutException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import io.ably.lib.http.HttpConstants;
-import io.ably.lib.http.HttpCore;
-import io.ably.lib.test.common.Helpers;
-import io.ably.lib.types.*;
-
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.Timeout;
-
 import fi.iki.elonen.NanoHTTPD;
 import fi.iki.elonen.router.RouterNanoHTTPD;
 import io.ably.lib.debug.DebugOptions;
+import io.ably.lib.http.HttpConstants;
+import io.ably.lib.http.HttpCore;
+import io.ably.lib.network.HttpRequest;
 import io.ably.lib.rest.AblyRest;
 import io.ably.lib.rest.Auth;
 import io.ably.lib.rest.Auth.AuthMethod;
@@ -32,11 +14,39 @@ import io.ably.lib.rest.Auth.TokenDetails;
 import io.ably.lib.rest.Auth.TokenParams;
 import io.ably.lib.rest.Auth.TokenRequest;
 import io.ably.lib.rest.Channel;
-import io.ably.lib.test.common.ParameterizedTest;
+import io.ably.lib.test.common.Helpers;
 import io.ably.lib.test.common.Helpers.RawHttpTracker;
+import io.ably.lib.test.common.ParameterizedTest;
 import io.ably.lib.test.util.TokenServer;
+import io.ably.lib.types.AblyException;
+import io.ably.lib.types.ClientOptions;
+import io.ably.lib.types.ErrorInfo;
+import io.ably.lib.types.Message;
+import io.ably.lib.types.MessageSerializer;
+import io.ably.lib.types.PaginatedResult;
+import io.ably.lib.types.Param;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.rules.Timeout;
 
-import static org.junit.Assert.*;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import static junit.framework.TestCase.assertNull;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RestAuthTest extends ParameterizedTest {
 
@@ -191,20 +201,20 @@ public class RestAuthTest extends ParameterizedTest {
     }
 
     /**
-     * Init library with a key and clientId; expect token auth to be chosen
-     * Spec: RSA4, RSC17, RSA7b1
+     * Init library with a key and clientId; expect basic auth to be chosen
+     * Spec: RSC17, RSA7b1
      */
     @Test
-    public void authinit_clientId_implies_token() {
+    public void authinit_clientId_auth_basic() {
         try {
             ClientOptions opts = createOptions(testVars.keys[0].keyStr);
             opts.clientId = "testClientId";
             AblyRest ably = new AblyRest(opts);
-            assertEquals("Unexpected Auth method mismatch", ably.auth.getAuthMethod(), AuthMethod.token);
+            assertEquals("Unexpected Auth method mismatch", ably.auth.getAuthMethod(), AuthMethod.basic);
             assertEquals("Unexpected clientId mismatch", ably.auth.clientId, "testClientId");
         } catch (AblyException e) {
             e.printStackTrace();
-            fail("authinit_clientId_implies_token: Unexpected exception instantiating library");
+            fail("authinit_clientId_auth_basic: Unexpected exception instantiating library");
         }
     }
 
@@ -1316,7 +1326,7 @@ public class RestAuthTest extends ParameterizedTest {
 
             /* Publish a message */
             Message messagePublishee = new Message(
-                    "wildcard",	/* name */
+                    "wildcard",  /* name */
                     String.valueOf(System.currentTimeMillis()), /* data */
                     "brian that is called brian" /* clientId */
             );
@@ -1368,7 +1378,7 @@ public class RestAuthTest extends ParameterizedTest {
             DebugOptions options = new DebugOptions(testVars.keys[0].keyStr) {{
                 this.httpListener = new RawHttpListener() {
                     @Override
-                    public HttpCore.Response onRawHttpRequest(String id, HttpURLConnection conn, String method, String authHeader,
+                    public HttpCore.Response onRawHttpRequest(String id, HttpRequest request, String authHeader,
                                                               Map<String, List<String>> requestHeaders, HttpCore.RequestBody requestBody) {
                         try {
                             if(testParams.useBinaryProtocol) {
@@ -1396,7 +1406,7 @@ public class RestAuthTest extends ParameterizedTest {
 
             /* Publish a message */
             Message messagePublishee = new Message(
-                    "I have clientId",	/* name */
+                    "I have clientId",  /* name */
                     String.valueOf(System.currentTimeMillis()) /* data */
             );
 
@@ -1433,7 +1443,7 @@ public class RestAuthTest extends ParameterizedTest {
             DebugOptions options = new DebugOptions(testVars.keys[0].keyStr) {{
                 this.httpListener = new RawHttpListener() {
                     @Override
-                    public HttpCore.Response onRawHttpRequest(String id, HttpURLConnection conn, String method, String authHeader,
+                    public HttpCore.Response onRawHttpRequest(String id, HttpRequest request, String authHeader,
                                                               Map<String, List<String>> requestHeaders, HttpCore.RequestBody requestBody) {
                         try {
                             if(testParams.useBinaryProtocol) {
@@ -1461,7 +1471,7 @@ public class RestAuthTest extends ParameterizedTest {
 
             /* Publish a message */
             Message messagePublishee = new Message(
-                    "I have clientId",	/* name */
+                    "I have clientId",  /* name */
                     String.valueOf(System.currentTimeMillis()), /* data */
                     messageClientId /* clientId */
             );
@@ -1901,7 +1911,7 @@ public class RestAuthTest extends ParameterizedTest {
     private static class SessionHandlerNanoHTTPD extends RouterNanoHTTPD {
         private final ArrayList<String> requestHistory = new ArrayList<>();
 
-        public SessionHandlerNanoHTTPD(int port) {
+        SessionHandlerNanoHTTPD(int port) {
             super(port);
         }
 

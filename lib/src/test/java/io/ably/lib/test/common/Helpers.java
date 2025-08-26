@@ -1,10 +1,29 @@
 package io.ably.lib.test.common;
 
-import java.net.HttpURLConnection;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -15,8 +34,11 @@ import io.ably.lib.debug.DebugOptions.RawHttpListener;
 import io.ably.lib.debug.DebugOptions.RawProtocolListener;
 import io.ably.lib.http.HttpCore;
 import io.ably.lib.http.HttpUtils;
+import io.ably.lib.network.HttpRequest;
+import io.ably.lib.realtime.AblyRealtime;
 import io.ably.lib.realtime.Channel;
 import io.ably.lib.realtime.Channel.MessageListener;
+import io.ably.lib.realtime.ChannelEvent;
 import io.ably.lib.realtime.ChannelState;
 import io.ably.lib.realtime.ChannelStateListener;
 import io.ably.lib.realtime.CompletionListener;
@@ -37,11 +59,17 @@ import io.ably.lib.types.ProtocolMessage.Action;
 import io.ably.lib.util.Base64Coder;
 import io.ably.lib.util.Log;
 import io.ably.lib.util.Serialisation;
+import org.hamcrest.Matcher;
 
 import static junit.framework.Assert.assertTrue;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class Helpers {
 
@@ -66,8 +94,8 @@ public class Helpers {
             return result;
         } catch (AblyException e) {
             try {
-                assertNotNull(String.format("got error \"%s\", none expected", e.errorInfo.message), expectedError);
-                assertEquals(String.format("expected to match \"%s\", got \"%s\"", expectedError, e.errorInfo.message), true, Pattern.compile(expectedError).matcher(e.errorInfo.message).find());
+                assertNotNull(String.format(Locale.ROOT, "got error \"%s\", none expected", e.errorInfo.message), expectedError);
+                assertEquals(String.format(Locale.ROOT, "expected to match \"%s\", got \"%s\"", expectedError, e.errorInfo.message), true, Pattern.compile(expectedError).matcher(e.errorInfo.message).find());
                 if (expectedCode > 0) {
                     assertEquals(expectedCode, e.errorInfo.code);
                 }
@@ -83,17 +111,17 @@ public class Helpers {
     }
 
     public static void assertInstanceOf(Class<?> c, Object o) {
-        assertTrue(String.format("expected object of class %s to be instance of %s", o.getClass().getName(), c.getName()), c.isInstance(o));
+        assertTrue(String.format(Locale.ROOT, "expected object of class %s to be instance of %s", o.getClass().getName(), c.getName()), c.isInstance(o));
     }
 
     public static void assertSize(int expected, Collection<?> c) {
         int size = c.size();
-        assertEquals(String.format("expected collection to have size %d, got %d: %s", expected, size, c), expected, size);
+        assertEquals(String.format(Locale.ROOT, "expected collection to have size %d, got %d: %s", expected, size, c), expected, size);
     }
 
     public static <T> void assertSize(int expected, T[] c) {
         int size = c.length;
-        assertEquals(String.format("expected array to have size %d, got %d: %s", expected, size, c), expected, size);
+        assertEquals(String.format(Locale.ROOT, "expected array to have size %d, got %d: %s", expected, size, c), expected, size);
     }
 
     public static HttpCore.Response httpResponseFromErrorInfo(final ErrorInfo errorInfo) {
@@ -151,15 +179,38 @@ public class Helpers {
             error = null;
         }
 
-        public synchronized ErrorInfo waitFor(int count) {
+        /**
+         * Wait for a specified amount of time, or until success occurs.
+         */
+        public synchronized ErrorInfo waitFor(int count, long timeoutInMillis) {
+            long timeoutAt = System.currentTimeMillis() + timeoutInMillis;
             while(successCount<count && error == null)
-                try { wait(); } catch(InterruptedException e) {}
+                try {
+                    if (System.currentTimeMillis() > timeoutAt) {
+                        break;
+                    }
+
+                     wait();
+                } catch(InterruptedException ignored) {}
             success = successCount >= count;
+            if (error != null) {
+                assertNotNull(error.message);
+            }
             return error;
         }
 
+        /**
+         * Wait for a specified number of successes, with an arbitrarily long timeout.
+         */
+        public synchronized ErrorInfo waitFor(int count) {
+            return waitFor(count, 600000);
+        }
+
+        /**
+         * Wait for a single success with an arbitrarily long timeout.
+         */
         public synchronized ErrorInfo waitFor() {
-            return waitFor(1);
+            return waitFor(1, 600000);
         }
 
         /**
@@ -222,7 +273,7 @@ public class Helpers {
          */
         public synchronized void waitFor(int count) {
             while(receivedMessages.size() < count)
-                try { wait(); } catch(InterruptedException e) {}
+                try { wait(); } catch(InterruptedException ignored) {}
         }
 
         /**
@@ -233,7 +284,7 @@ public class Helpers {
             long targetTime = System.currentTimeMillis() + time;
             long remaining = time;
             while(receivedMessages.size() < count && remaining > 0) {
-                try { wait(remaining); } catch(InterruptedException e) {}
+                try { wait(remaining); } catch(InterruptedException ignored) {}
                 remaining = targetTime - System.currentTimeMillis();
             }
         }
@@ -360,6 +411,48 @@ public class Helpers {
         }
     }
 
+    public static class MutableConnectionManager {
+        ConnectionManager connectionManager;
+
+        public MutableConnectionManager(AblyRealtime ablyRealtime) {
+            this.connectionManager = ablyRealtime.connection.connectionManager;
+        }
+
+        public void setField(String fieldName, long value) {
+            try {
+                Field connectionStateField = ConnectionManager.class.getDeclaredField(fieldName);
+                connectionStateField.setAccessible(true);
+                connectionStateField.setLong(connectionManager, value);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                fail("Failed updating " + fieldName + " with error " + e);
+            }
+        }
+
+        public long getField(String fieldName) {
+            try {
+                Field connectionStateField = ConnectionManager.class.getDeclaredField(fieldName);
+                connectionStateField.setAccessible(true);
+                return connectionStateField.getLong(connectionManager);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                fail("Failed accessing " + fieldName + " with error " + e);
+            }
+            return 0;
+        }
+
+        /**
+         * Suppress automatic retries by the connection manager and disconnect
+         */
+        public void disconnectAndSuppressRetries() {
+            try {
+                Method method = ConnectionManager.class.getDeclaredMethod("disconnectAndSuppressRetries");
+                method.setAccessible(true);
+                method.invoke(connectionManager);
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+                fail("Unexpected exception in suppressing retries");
+            }
+        }
+    }
+
     /**
      * A class that listens for state change events on a connection.
      * @author paddy
@@ -387,7 +480,7 @@ public class Helpers {
             while (currentState() != state) {
                 try {
                     wait();
-                } catch (InterruptedException e) {
+                } catch (InterruptedException ignored) {
                 }
             }
             Log.d(TAG, "waitFor done: state=" + targetStateName + ")");
@@ -403,8 +496,8 @@ public class Helpers {
             Log.d(TAG, "waitFor(state=" + state.getConnectionEvent().name() + ", count=" + count + ")");
 
             while(getStateCount(state) < count)
-                try { wait(); } catch(InterruptedException e) {}
-            Log.d(TAG, "waitFor done: state=" + latestChange.current.getConnectionEvent().name() + ", count=" + getStateCount(state) + ")");
+                try { wait(); } catch(InterruptedException ignored) {}
+            Log.d(TAG, "waitFor done: state=" + lastStateChange().current.getConnectionEvent().name() + ", count=" + getStateCount(state) + ")");
         }
 
         /**
@@ -421,7 +514,7 @@ public class Helpers {
             long remaining = time;
             while(getStateCount(state) < count && remaining > 0) {
                 Log.d(TAG, "waitFor(state=" + state.getConnectionEvent().name() + ", waiting for=" + remaining + ")");
-                try { wait(remaining); } catch(InterruptedException e) {}
+                try { wait(remaining); } catch(InterruptedException ignored) {}
                 remaining = targetTime - System.currentTimeMillis();
             }
             int stateCount = getStateCount(state);
@@ -462,7 +555,7 @@ public class Helpers {
         @Override
         public void onConnectionStateChanged(ConnectionStateListener.ConnectionStateChange state) {
             synchronized(this) {
-                latestChange = state;
+                stateChanges.add(state);
                 reason = state.reason;
                 Counter counter = stateCounts.get(state.current); if(counter == null) stateCounts.put(state.current, (counter = new Counter()));
                 counter.incr();
@@ -483,15 +576,23 @@ public class Helpers {
         }
 
         private synchronized ConnectionState currentState() {
-            return latestChange == null ? connection.state : latestChange.current;
+            ConnectionStateChange stateChange = lastStateChange();
+            return stateChange == null ? connection.state : stateChange.current;
+        }
+
+        public synchronized ConnectionStateChange lastStateChange() {
+            if (stateChanges.size() == 0) {
+                return null;
+            }
+            return stateChanges.get(stateChanges.size() -1);
         }
 
         /**
          * Internal
          */
-        private Connection connection;
+        private final Connection connection;
         private ErrorInfo reason;
-        private ConnectionStateChange latestChange;
+        private final List<ConnectionStateChange> stateChanges = new ArrayList<>();
         private Map<ConnectionState, Counter> stateCounts;
         private static final String TAG = ConnectionWaiter.class.getName();
     }
@@ -516,14 +617,14 @@ public class Helpers {
          */
         public synchronized ErrorInfo waitFor(ConnectionState state) {
             while(connectionManager.getConnectionState().state != state)
-                try { wait(INTERVAL_POLLING); } catch(InterruptedException e) {}
+                try { wait(INTERVAL_POLLING); } catch(InterruptedException ignored) {}
             return connectionManager.getConnectionState().defaultErrorInfo;
         }
 
         /**
          * Internal
          */
-        private ConnectionManager connectionManager;
+        private final ConnectionManager connectionManager;
     }
 
     /**
@@ -536,7 +637,6 @@ public class Helpers {
 
         /**
          * Public API
-         * @param channel
          */
         public ChannelWaiter(Channel channel) {
             this.channel = channel;
@@ -545,28 +645,80 @@ public class Helpers {
 
         /**
          * Wait for a given state to be reached.
-         * @param state
          */
-        public synchronized ErrorInfo waitFor(ChannelState state) {
-            Log.d(TAG, "waitFor(" + state + ")");
-            while(channel.state != state)
-                try { wait(); } catch(InterruptedException e) {}
-            Log.d(TAG, "waitFor done: " + channel.state + ", " + channel.reason + ")");
+        public synchronized ErrorInfo waitFor(ChannelState ... states) {
+            for (ChannelState state : states) {
+                Log.d(TAG, "waitFor(" + state + ")");
+                while(channel.state != state)
+                    try { wait(); } catch(InterruptedException ignored) {}
+                Log.d(TAG, "waitFor done: " + channel.state + ", " + channel.reason + ")");
+            }
             return channel.reason;
+        }
+
+        /**
+         * Wait for a given ChannelEvent to be reached.
+         */
+        public synchronized ChannelStateChange waitFor(ChannelEvent channelEvent) {
+            Log.d(TAG, "waitFor(" + channelEvent + ")");
+            ChannelStateChange lastStateChange = getLastStateChange();
+            while(lastStateChange.event != channelEvent)
+                try { wait(); } catch(InterruptedException ignored) {}
+            Log.d(TAG, "waitFor done: " + channel.state + ", " + channel.reason + ")");
+            return lastStateChange;
         }
 
         /**
          * ChannelStateListener interface
          */
         @Override
-        public void onChannelStateChanged(ChannelStateListener.ChannelStateChange stateChange) {
-            synchronized(this) { notify(); }
+        public void onChannelStateChanged(ChannelStateChange stateChange) {
+            synchronized(this) {
+                recordedStates.add(stateChange);
+                notify();
+            }
         }
 
+        private final List<ChannelStateChange> recordedStates = Collections.synchronizedList(new ArrayList<>());
+
+        public List<ChannelState> getRecordedStates() {
+            return recordedStates.stream().map(stateChange -> stateChange.current).collect(Collectors.toList());
+        }
+
+        public boolean hasFinalStates(ChannelState ... states) {
+            List<ChannelState> rstates = getRecordedStates();
+            List<ChannelState> vettedList = rstates.subList(rstates.size() - states.length, rstates.size());
+            return hasStates(vettedList, states);
+        }
+
+        public boolean hasStates(ChannelState ... states) {
+            return hasStates(getRecordedStates(), states);
+        }
+
+        private static boolean hasStates(List<ChannelState> stateList, ChannelState ... states) {
+            boolean foundStates = false;
+            int statesCounter = 0;
+            for (ChannelState recordedState : stateList) {
+                if (states[statesCounter] != recordedState) {
+                    statesCounter = 0;
+                }
+                if (states[statesCounter] == recordedState) {
+                    statesCounter++;
+                }
+                if (statesCounter == states.length) {
+                    foundStates = true;
+                }
+            }
+            return foundStates;
+        }
+
+        public ChannelStateChange getLastStateChange() {
+            return recordedStates.get(recordedStates.size()-1);
+        }
         /**
          * Internal
          */
-        private Channel channel;
+        private final Channel channel;
     }
 
     /**
@@ -599,24 +751,56 @@ public class Helpers {
          * Wait for a given number of messages
          */
         public void waitForRecv() {
-            waitForRecv(1);
+            waitForRecv(1, 6000000);
         }
         public void waitForSend() {
-            waitForSend(1);
+            waitForSend(1, 6000000);
+        }
+        public void waitForRecv(int count) {
+            waitForRecv(count, 6000000);
+        }
+        public void waitForSend(int count) {
+            waitForSend(count, 6000000);
         }
 
         /**
          * Wait for a given number of messages
          * @param count
          */
-        public synchronized void waitForRecv(int count) {
+        public synchronized void waitForRecv(int count, long timeoutInMillis) {
+            long timeoutAt = System.currentTimeMillis() + timeoutInMillis;
             while(receivedMessages.size() < count) {
-                try { wait(); } catch(InterruptedException e) {}
+                synchronized (this) {
+                    try {
+                        if (System.currentTimeMillis() > timeoutAt || receivedMessages.size() >= count) {
+                            break;
+                        }
+
+                        wait();
+                    } catch(InterruptedException e) {}
+                }
+            }
+
+            if (receivedMessages.size() < count) {
+                throw new AssertionError("Did not receive expected number of messages");
             }
         }
-        public synchronized void waitForSend(int count) {
+        public synchronized void waitForSend(int count, long timeoutInMillis) {
+            long timeoutAt = System.currentTimeMillis() + timeoutInMillis;
             while(sentMessages.size() < count) {
-                try { wait(); } catch(InterruptedException e) {}
+                synchronized (this) {
+                    try {
+                        if (System.currentTimeMillis() > timeoutAt || sentMessages.size() >= count) {
+                            break;
+                        }
+
+                        wait();
+                    } catch(InterruptedException e) {}
+                }
+            }
+
+            if (sentMessages.size() < count) {
+                throw new AssertionError("Did not send expected number of messages");
             }
         }
 
@@ -741,6 +925,14 @@ public class Helpers {
         }
     }
 
+    public static void assertTimeoutBetween(int timeout, Double min, Double max) {
+        assertThat(String.format("timeout %d should be between %f and %f", timeout, min, max ), (double) timeout, between(min, max));
+    }
+
+    public static Matcher<Double> between(Double min, Double max) {
+        return allOf(greaterThanOrEqualTo(min), lessThanOrEqualTo(max));
+    }
+
     public static class AsyncWaiter<T> implements Callback<T> {
         @Override
         public synchronized void onSuccess(T result) {
@@ -780,7 +972,6 @@ public class Helpers {
     public static class RawHttpRequest {
         public String id;
         public URL url;
-        public HttpURLConnection conn;
         public String method;
         public String authHeader;
         public Map<String, List<String>> requestHeaders;
@@ -796,7 +987,7 @@ public class Helpers {
         private AsyncWaiter<RawHttpRequest> requestWaiter = null;
 
         @Override
-        public HttpCore.Response onRawHttpRequest(String id, HttpURLConnection conn, String method, String authHeader, Map<String, List<String>> requestHeaders,
+        public HttpCore.Response onRawHttpRequest(String id, HttpRequest request, String authHeader, Map<String, List<String>> requestHeaders,
                                                   HttpCore.RequestBody requestBody) {
 
             /* duplicating if necessary, ensure lower-case versions of header names are present */
@@ -804,14 +995,13 @@ public class Helpers {
             if(requestHeaders != null) {
                 normalisedHeaders.putAll(requestHeaders);
                 for(String header : requestHeaders.keySet()) {
-                    normalisedHeaders.put(header.toLowerCase(), requestHeaders.get(header));
+                    normalisedHeaders.put(header.toLowerCase(Locale.ROOT), requestHeaders.get(header));
                 }
             }
             RawHttpRequest req = new RawHttpRequest();
             req.id = id;
-            req.url = conn.getURL();
-            req.conn = conn;
-            req.method = method;
+            req.url = request.getUrl();
+            req.method = request.getMethod();
             req.authHeader = authHeader;
             req.requestHeaders = normalisedHeaders;
             req.requestBody = requestBody;
@@ -851,7 +1041,7 @@ public class Helpers {
             if(headers != null) {
                 normalisedHeaders.putAll(headers);
                 for(String header : headers.keySet()) {
-                    normalisedHeaders.put(header.toLowerCase(), headers.get(header));
+                    normalisedHeaders.put(header.toLowerCase(Locale.ROOT), headers.get(header));
                 }
                 response.headers = normalisedHeaders;
             }
@@ -884,7 +1074,7 @@ public class Helpers {
             String result = null;
             RawHttpRequest req = get(id);
             if(req != null) {
-                String query = req.conn.getURL().getQuery();
+                String query = req.url.getQuery();
                 if(query != null && !query.isEmpty()) {
                     result = HttpUtils.decodeParams(query).get(param).value;
                 }
@@ -896,7 +1086,7 @@ public class Helpers {
             List<String> result = null;
             RawHttpRequest req = get(id);
             if(req != null) {
-                header = header.toLowerCase();
+                header = header.toLowerCase(Locale.ROOT);
                 if(header.equalsIgnoreCase("authorization")) {
                     result = Collections.singletonList(req.authHeader);
                 } else {
@@ -910,7 +1100,7 @@ public class Helpers {
             List<String> result = null;
             RawHttpRequest req = get(id);
             if(req != null) {
-                header = header.toLowerCase();
+                header = header.toLowerCase(Locale.ROOT);
                 List<String>headers = req.response.headers.get(header);
                 if(headers != null && headers.size() > 0) {
                     result = headers;
@@ -995,5 +1185,35 @@ public class Helpers {
 
     public interface AblyFunction<Arg, Result> {
         Result apply(Arg arg) throws AblyException;
+    }
+
+    public interface ConditionFn<O> {
+        O call();
+    }
+
+    public static class ConditionalWaiter {
+        public Exception wait(ConditionFn<Boolean> condition, int timeoutInMs) {
+            AtomicBoolean taskTimedOut = new AtomicBoolean();
+            new Timer().schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    taskTimedOut.set(true);
+                }
+            }, timeoutInMs);
+            while (true) {
+                try {
+                    Boolean result = condition.call();
+                    if (result) {
+                        return null;
+                    }
+                    if (taskTimedOut.get()) {
+                        throw new Exception("Timed out after " + timeoutInMs + "ms waiting for condition");
+                    }
+                    Thread.sleep(200);
+                } catch (Exception e) {
+                    return e;
+                }
+            }
+        }
     }
 }

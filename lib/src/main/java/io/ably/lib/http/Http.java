@@ -7,13 +7,27 @@ import io.ably.lib.types.ErrorInfo;
 /**
  * A high level wrapper of both a sync and an async HttpScheduler.
  */
-public class Http {
+public class Http implements AutoCloseable {
     private final AsyncHttpScheduler asyncHttp;
     private final SyncHttpScheduler syncHttp;
 
     public Http(AsyncHttpScheduler asyncHttp, SyncHttpScheduler syncHttp) {
         this.asyncHttp = asyncHttp;
         this.syncHttp = syncHttp;
+    }
+
+    @Override
+    public void close() throws Exception {
+        asyncHttp.close();
+    }
+
+    /**
+     * [Internal Method]
+     * <p>
+     * We use this method to implement proxy Realtime / Rest clients that add additional data to the underlying client.
+     */
+    public Http exchangeHttpCore(HttpCore httpCore) {
+        return new Http(asyncHttp.exchangeHttpCore(httpCore), new SyncHttpScheduler(httpCore));
     }
 
     public class Request<Result> {
@@ -60,7 +74,7 @@ public class Http {
             @Override
             public void execute(HttpScheduler http, final Callback<Result> callback) throws AblyException {
                 //throw e;
-                http.executor.execute(new Runnable() {
+                http.execute(new Runnable() {
                 @Override
                 public void run() {
                     callback.onError(e.errorInfo);

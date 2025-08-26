@@ -4,6 +4,8 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.ConcurrentModificationException;
+import java.util.Locale;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -14,25 +16,11 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import io.ably.lib.types.AblyException;
-import io.ably.lib.types.ChannelOptions;
 import io.ably.lib.types.ErrorInfo;
+import io.ably.lib.types.Param;
 
 /**
- * Utility classes and interfaces for message payload encryption.
- *
- * This class supports AES/CBC/PKCS5 with a default key length of 256 bits
- * but supporting other key lengths. Other algorithms and chaining modes are
- * not supported directly, but supportable by extending/implementing the base
- * classes and interfaces here.
- *
- * Secure random data for creation of Initialisation Vectors (IVs) and keys
- * is obtained from the default system SecureRandom. Future extensions of this
- * class might make the SecureRandom pluggable or at least seedable with
- * client-provided entropy.
- *
- * Each message payload is encrypted with an IV in CBC mode, and the IV is
- * concatenated with the resulting raw ciphertext to construct the "ciphertext"
- * data passed to the recipient.
+ * Contains the properties required to configure the encryption of {@link io.ably.lib.types.Message} payloads.
  */
 public class Crypto {
 
@@ -41,17 +29,20 @@ public class Crypto {
     public static final int DEFAULT_BLOCKLENGTH = 16; // bytes
 
     /**
-     * A class encapsulating the client-specifiable parameters for
-     * the cipher.
-     *
-     * algorithm is the name of the algorithm in the default system provider,
-     * or the lower-cased version of it; eg "aes" or "AES".
-     *
-     * Clients may instance a CipherParams directly and populate it, or may
-     * query the implementation to obtain a default system CipherParams.
+     * Sets the properties to configure encryption for a {@link io.ably.lib.rest.Channel} or {@link io.ably.lib.realtime.Channel} object.
      */
     public static class CipherParams {
+        /**
+         * The algorithm to use for encryption. Only AES is supported and is the default value.
+         * <p>
+         * Spec: TZ2a
+         */
         private final String algorithm;
+        /**
+         * The length of the key in bits; for example 128 or 256.
+         * <p>
+         * Spec: TZ2b
+         */
         private final int keyLength;
         private final SecretKeySpec keySpec;
         private final IvParameterSpec ivSpec;
@@ -59,7 +50,7 @@ public class Crypto {
         CipherParams(String algorithm, byte[] key, byte[] iv) throws NoSuchAlgorithmException {
             this.algorithm = (null == algorithm) ? DEFAULT_ALGORITHM : algorithm;
             keyLength = key.length * 8;
-            keySpec = new SecretKeySpec(key, this.algorithm.toUpperCase());
+            keySpec = new SecretKeySpec(key, this.algorithm.toUpperCase(Locale.ROOT));
             ivSpec = new IvParameterSpec(iv);
         }
 
@@ -83,26 +74,19 @@ public class Crypto {
     }
 
     /**
-     * Obtain a default CipherParams. This uses default algorithm, mode and
-     * padding and key length. A key and IV are generated using the default
-     * system SecureRandom; the key may be obtained from the returned CipherParams
-     * for out-of-band distribution to other clients.
-     * @return the CipherParams
+     * <p>
+     * Spec: RSE1
+     * @return A {@link CipherParams} object, using the default values for all fields.
      */
     public static CipherParams getDefaultParams() {
         return getParams(DEFAULT_ALGORITHM, DEFAULT_KEYLENGTH);
     }
 
     /**
-     * Obtain a default CipherParams. This uses default algorithm, mode and
-     * padding and initialises a key based on the given key data. The cipher
-     * key length is derived from the length of the given key data. An IV is
-     * generated using the default system SecureRandom.
-     *
-     * Use this method of constructing CipherParams if initialising a Channel
-     * with a client-provided key, or to obtain a system-generated key of a
-     * non-default key length.
-     * @return the CipherParams
+     * <p>
+     * Spec: RSE1
+     * @param key client-provided key
+     * @return A {@link CipherParams} object, using the default values for any fields not supplied.
      */
     public static CipherParams getDefaultParams(byte[] key) {
         try {
@@ -111,25 +95,32 @@ public class Crypto {
     }
 
     /**
-     * Package scoped method for unit testing purposes.
+     * <p>
+     * Spec: RSE1
+     * @param key client-provided key
+     * @param iv the buffer with the IV
+     * @return A {@link CipherParams} object, using the default values for any fields not supplied.
      */
     static CipherParams getDefaultParams(byte[] key, byte[] iv) throws NoSuchAlgorithmException {
         return new CipherParams(DEFAULT_ALGORITHM, key, iv);
     }
 
     /**
-     * Obtain a default CipherParams using Base64-encoded key. Same as above, throws
-     * IllegalArgumentException if base64Key is invalid
-     *
-     * @param base64Key
-     * @return
+     * <p>
+     * Spec: RSE1
+     * @param base64Key Base64-encoded key
+     * @return A {@link CipherParams} object, using the default values for any fields not supplied.
      */
     public static CipherParams getDefaultParams(String base64Key) {
         return getDefaultParams(Base64Coder.decode(base64Key));
     }
 
     /**
-     * Package scoped method for unit testing purposes.
+     * <p>
+     * Spec: RSE1
+     * @param base64Key Base64-encoded key
+     * @param iv the buffer with the IV
+     * @return A {@link CipherParams} object, using the default values for any fields not supplied.
      */
     static CipherParams getDefaultParams(String base64Key, byte[] iv) throws NoSuchAlgorithmException {
         return new CipherParams(null, Base64Coder.decode(base64Key), iv);
@@ -138,7 +129,7 @@ public class Crypto {
     public static CipherParams getParams(String algorithm, int keyLength) {
         if(algorithm == null) algorithm = DEFAULT_ALGORITHM;
         try {
-            KeyGenerator keygen = KeyGenerator.getInstance(algorithm.toUpperCase());
+            KeyGenerator keygen = KeyGenerator.getInstance(algorithm.toUpperCase(Locale.ROOT));
             keygen.init(keyLength);
             byte[] key = keygen.generateKey().getEncoded();
             return getParams(algorithm, key);
@@ -156,108 +147,139 @@ public class Crypto {
         return new CipherParams(algorithm, key, iv);
     }
 
+    /**
+     * Generates a random key to be used in the encryption of the channel.
+     * If the language cryptographic randomness primitives are blocking or async, a callback is used.
+     * The callback returns a generated binary key.
+     * <p>
+     * Spec: RSE2
+     * @param keyLength The length of the key, in bits, to be generated.
+     *                  If not specified, this is equal to the default keyLength of the default algorithm: for AES this is 256 bits.
+     * @return The key as a binary, in a byte array.
+     */
     public static byte[] generateRandomKey(int keyLength) {
         byte[] result = new byte[(keyLength + 7)/8];
         secureRandom.nextBytes(result);
         return result;
     }
 
+    /**
+     * Generates a random key to be used in the encryption of the channel.
+     * If the language cryptographic randomness primitives are blocking or async, a callback is used.
+     * The callback returns a generated binary key.
+     * <p>
+     * Spec: RSE2
+     * @return The key as a binary, in a byte array.
+     */
     public static byte[] generateRandomKey() {
         return generateRandomKey(DEFAULT_KEYLENGTH);
     }
 
     /**
-     * Interface for a ChannelCipher instance that may be associated with a Channel.
-     *
+     * Internal; a cipher used to encrypt plaintext to ciphertext, for a channel.
      */
-    public interface ChannelCipher {
+    public interface EncryptingChannelCipher {
+        /**
+         * Enciphers plaintext.
+         *
+         * This method is not safe to be called from multiple threads at the same time, and it will throw a
+         * {@link ConcurrentModificationException} if that happens at runtime.
+         *
+         * @return ciphertext, being the result of encrypting plaintext.
+         * @throws ConcurrentModificationException If this method is called from more than one thread at a time.
+         */
         byte[] encrypt(byte[] plaintext) throws AblyException;
-        byte[] decrypt(byte[] ciphertext) throws AblyException;
+
         String getAlgorithm();
     }
 
     /**
-     * Internal; get a ChannelCipher instance based on the given ChannelOptions
-     * @param opts
-     * @return
-     * @throws AblyException
+     * Internal; a cipher used to decrypt plaintext from ciphertext, for a channel.
      */
-    public static ChannelCipher getCipher(final ChannelOptions opts) throws AblyException {
-        final Object opaqueCipherParams = opts.cipherParams;
-        final CipherParams cipherParams;
-        if(null == opaqueCipherParams)
-            cipherParams = Crypto.getDefaultParams();
-        else if(opts.cipherParams instanceof CipherParams)
-            cipherParams = (CipherParams)opts.cipherParams;
-        else
-            throw AblyException.fromErrorInfo(new ErrorInfo("ChannelOptions not supported", 400, 40000));
-
-        return new CBCCipher(cipherParams);
+    public interface DecryptingChannelCipher {
+        /**
+         * Deciphers ciphertext.
+         *
+         * This method is not safe to be called from multiple threads at the same time, and it will throw a
+         * {@link ConcurrentModificationException} if that happens at runtime.
+         *
+         * @return plaintext, being the result of decrypting ciphertext.
+         * @throws ConcurrentModificationException If this method is called from more than one thread at a time.
+         */
+        byte[] decrypt(byte[] ciphertext) throws AblyException;
     }
 
     /**
-     * Internal: a class that implements a CBC mode ChannelCipher.
+     * Internal; get an encrypting cipher instance based on the given channel options.
+     */
+    public static EncryptingChannelCipher createChannelEncipher(final CipherParams cipherParams) throws AblyException {
+        return new EncryptingCBCCipher(cipherParams);
+    }
+
+    /**
+     * Internal; get a decrypting cipher instance based on the given channel options.
+     */
+    public static DecryptingChannelCipher createChannelDecipher(final CipherParams cipherParams) throws AblyException {
+        return new DecryptingCBCCipher(cipherParams);
+    }
+
+    /**
+     * Internal; if `cipherParams` is null returns default params otherwise check if params valid and returns them
+     */
+    public static CipherParams checkCipherParams(final Object cipherParams) throws AblyException {
+        if (null == cipherParams) {
+            return Crypto.getDefaultParams();
+        } else if (cipherParams instanceof CipherParams) {
+            return (CipherParams) cipherParams;
+        } else {
+            throw AblyException.fromErrorInfo(new ErrorInfo("ChannelOptions not supported", 400, 40000));
+        }
+    }
+
+    /**
+     * Implements a CBC mode ChannelCipher.
      * A single block of secure random data is provided for an initial IV.
      * Consecutive messages are chained in a manner that allows each to be
      * emitted with an IV, allowing each to be deciphered independently,
      * whilst avoiding having to obtain further entropy for IVs, and reinit
      * the cipher, between successive messages.
-     *
      */
-    private static class CBCCipher implements ChannelCipher {
-        private final SecretKeySpec keySpec;
-        private final Cipher encryptCipher;
-        private final Cipher decryptCipher;
-        private final String algorithm;
-        private final int blockLength;
-        private byte[] iv;
+    private static class CBCCipher {
+        protected final SecretKeySpec keySpec;
+        protected final IvParameterSpec ivSpec;
+        protected final Cipher cipher;
+        protected final int blockLength;
+        protected final String algorithm;
 
-        private CBCCipher(CipherParams params) throws AblyException {
+        protected CBCCipher(final CipherParams params) throws AblyException {
             final String cipherAlgorithm = params.getAlgorithm();
-            String transformation = cipherAlgorithm.toUpperCase() + "/CBC/PKCS5Padding";
+            String transformation = cipherAlgorithm.toUpperCase(Locale.ROOT) + "/CBC/PKCS5Padding";
             try {
                 algorithm = cipherAlgorithm + '-' + params.getKeyLength() + "-cbc";
                 keySpec = params.keySpec;
-                encryptCipher = Cipher.getInstance(transformation);
-                encryptCipher.init(Cipher.ENCRYPT_MODE, params.keySpec, params.ivSpec);
-                decryptCipher = Cipher.getInstance(transformation);
-                iv = params.ivSpec.getIV();
-                blockLength = iv.length;
+                ivSpec = params.ivSpec;
+                blockLength = ivSpec.getIV().length;
+                cipher = Cipher.getInstance(transformation);
             }
-            catch (NoSuchAlgorithmException|NoSuchPaddingException|InvalidAlgorithmParameterException|InvalidKeyException e) {
+            catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
                 throw AblyException.fromThrowable(e);
             }
         }
+    }
 
-        @Override
-        public byte[] encrypt(byte[] plaintext) {
-            if(plaintext == null) return null;
-            int plaintextLength = plaintext.length;
-            int paddedLength = getPaddedLength(plaintextLength);
-            byte[] cipherIn = new byte[paddedLength];
-            byte[] ciphertext = new byte[paddedLength + blockLength];
-            int padding = paddedLength - plaintextLength;
-            System.arraycopy(plaintext, 0, cipherIn, 0, plaintextLength);
-            System.arraycopy(pkcs5Padding[padding], 0, cipherIn, plaintextLength, padding);
-            System.arraycopy(getIv(), 0, ciphertext, 0, blockLength);
-            byte[] cipherOut = encryptCipher.update(cipherIn);
-            System.arraycopy(cipherOut, 0, ciphertext, blockLength, paddedLength);
-            return ciphertext;
-        }
+    private static class EncryptingCBCCipher extends CBCCipher implements EncryptingChannelCipher {
+        private byte[] iv;
 
-        @Override
-        public byte[] decrypt(byte[] ciphertext) throws AblyException {
-            if(ciphertext == null) return null;
-            byte[] plaintext = null;
+        EncryptingCBCCipher(final CipherParams params) throws AblyException {
+            super(params);
+
             try {
-                decryptCipher.init(Cipher.DECRYPT_MODE, keySpec, new IvParameterSpec(ciphertext, 0, blockLength));
-                plaintext = decryptCipher.doFinal(ciphertext, blockLength, ciphertext.length - blockLength);
-            }
-            catch (InvalidKeyException|InvalidAlgorithmParameterException|IllegalBlockSizeException|BadPaddingException e) {
-                Log.e(TAG, "decrypt()", e);
+                cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+            } catch (InvalidAlgorithmParameterException | InvalidKeyException e) {
                 throw AblyException.fromThrowable(e);
             }
-            return plaintext;
+
+            iv = params.ivSpec.getIV();
         }
 
         @Override
@@ -266,36 +288,12 @@ public class Crypto {
         }
 
         /**
-         * Internal: get an IV for the next message.
-         * Returns either the IV that was used to initialise the ChannelCipher,
-         * or generates an IV based on the current cipher state.
-         */
-        private byte[] getIv() {
-            if(iv == null)
-                return encryptCipher.update(emptyBlock);
-
-            final byte[] result = iv;
-            iv = null;
-            return result;
-        }
-
-        /**
-         * Internal: calculate the padded length of a given plaintext
-         * using PKCS5.
-         * @param plaintextLength
-         * @return
-         */
-        private static int getPaddedLength(int plaintextLength) {
-            return (plaintextLength + DEFAULT_BLOCKLENGTH) & -DEFAULT_BLOCKLENGTH;
-        }
-
-        /**
-         * Internal: a block containing zeros
+         * A block containing zeros.
          */
         private static final byte[] emptyBlock = new byte[DEFAULT_BLOCKLENGTH];
 
         /**
-         * Internal: obtain the pkcs5 padding string for a given padded length;
+         * The PKCS5 padding strings for given padded lengths.
          */
         private static final byte[][] pkcs5Padding = new byte[][] {
             new byte[] {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16},
@@ -316,12 +314,78 @@ public class Crypto {
             new byte[] {15,15,15,15,15,15,15,15,15,15,15,15,15,15,15},
             new byte[] {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16}
         };
+
+        /**
+         * Returns the padded length of a given plaintext, using PKCS5.
+         */
+        private static int getPaddedLength(int plaintextLength) {
+            return (plaintextLength + DEFAULT_BLOCKLENGTH) & -DEFAULT_BLOCKLENGTH;
+        }
+
+        /**
+         * Get an IV for the next message.
+         * Returns either the IV that was used to initialise the ChannelCipher,
+         * or generates an IV based on the current cipher state.
+         */
+        private byte[] getNextIv() {
+            if (iv == null)
+                return cipher.update(emptyBlock);
+
+            final byte[] result = iv;
+            iv = null;
+            return result;
+        }
+
+        @Override
+        public byte[] encrypt(byte[] plaintext) {
+            if (plaintext == null) return null;
+
+            final int plaintextLength = plaintext.length;
+            final int paddedLength = getPaddedLength(plaintextLength);
+            final byte[] cipherIn = new byte[paddedLength];
+            final byte[] ciphertext = new byte[paddedLength + blockLength];
+            final int padding = paddedLength - plaintextLength;
+            System.arraycopy(plaintext, 0, cipherIn, 0, plaintextLength);
+            System.arraycopy(pkcs5Padding[padding], 0, cipherIn, plaintextLength, padding);
+            System.arraycopy(getNextIv(), 0, ciphertext, 0, blockLength);
+            final byte[] cipherOut = cipher.update(cipherIn);
+            System.arraycopy(cipherOut, 0, ciphertext, blockLength, paddedLength);
+            return ciphertext;
+        }
     }
 
-    public static String getRandomMessageId() {
+    private static class DecryptingCBCCipher extends CBCCipher implements DecryptingChannelCipher {
+        DecryptingCBCCipher(final CipherParams params) throws AblyException {
+            super(params);
+        }
+
+        @Override
+        public byte[] decrypt(byte[] ciphertext) throws AblyException {
+            if (ciphertext == null) return null;
+
+            try {
+                cipher.init(Cipher.DECRYPT_MODE, keySpec, new IvParameterSpec(ciphertext, 0, blockLength));
+                return cipher.doFinal(ciphertext, blockLength, ciphertext.length - blockLength);
+            } catch (InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException | InvalidKeyException e) {
+                throw AblyException.fromThrowable(e);
+            }
+        }
+    }
+
+    public static String getRandomId() {
         byte[] entropy = new byte[9];
         secureRandom.nextBytes(entropy);
-        return Base64Coder.encode(entropy).toString();
+        return Base64Coder.encodeToString(entropy);
+    }
+
+    /**
+     * Returns a "request_id" query param, based on a sequence of 9 random bytes
+     * which have been base64 encoded.
+     *
+     * Spec: RSC7c
+     */
+    public static Param generateRandomRequestId() {
+        return new Param("request_id", Crypto.getRandomId());
     }
 
     /**

@@ -1,12 +1,14 @@
 package io.ably.lib.http;
 
-import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Locale;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.ably.lib.network.HttpCall;
 import io.ably.lib.types.AblyException;
 import io.ably.lib.types.Callback;
 import io.ably.lib.types.ErrorInfo;
@@ -17,11 +19,8 @@ import io.ably.lib.util.Log;
  * HttpScheduler schedules HttpCore operations to an Executor, exposing a generic async API.
  *
  * Internal; use Http instead.
- *
- * @param <Executor> The Executor that will run blocking operations.
  */
-public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
-
+public class HttpScheduler implements AutoCloseable {
     /**
      * Async HTTP GET for Ably host, with fallbacks
      * @param path
@@ -189,6 +188,12 @@ public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
             this.path = path;
             this.requireAblyAuth = requireAblyAuth;
         }
+
+        private String extendMessage(String msg) {
+            return Param.getFirst(params, "request_id") == null ?
+                msg : String.format(Locale.ROOT, "%s request_id=%s", msg, Param.getFirst(params, "request_id"));
+        }
+
         @Override
         public void run() {
             String candidateHost = httpCore.hosts.getPreferredHost();
@@ -202,17 +207,20 @@ public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
                     break;
                 } catch (AblyException.HostFailedException e) {
                     if(--retryCountRemaining < 0) {
+                        e.errorInfo.message = extendMessage(e.errorInfo.message);
                         setError(e.errorInfo);
                         break;
                     }
-                    Log.d(TAG, "Connection failed to host `" + candidateHost + "`. Searching for new host...");
+                    Log.d(TAG, extendMessage("Connection failed to host `" + candidateHost + "`. Searching for new host..."));
                     candidateHost = httpCore.hosts.getFallback(candidateHost);
                     if (candidateHost == null) {
+                        e.errorInfo.message = extendMessage(e.errorInfo.message);
                         setError(e.errorInfo);
                         break;
                     }
-                    Log.d(TAG, "Switched to `" + candidateHost + "`.");
+                    Log.d(TAG, extendMessage("Switched to `" + candidateHost + "`."));
                 } catch(AblyException e) {
+                    e.errorInfo.message = extendMessage(e.errorInfo.message);
                     setError(e.errorInfo);
                     break;
                 } finally {
@@ -323,15 +331,15 @@ public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
             }
         }
         protected synchronized boolean disposeConnection() {
-            boolean hasConnection = conn != null;
+            boolean hasConnection = httpCall != null;
             if(hasConnection) {
-                conn.disconnect();
-                conn = null;
+                httpCall.cancel();
+                httpCall = null;
             }
             return hasConnection;
         }
 
-        protected HttpURLConnection conn;
+        protected HttpCall httpCall;
         protected T result;
         protected ErrorInfo err;
 
@@ -345,9 +353,14 @@ public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
         protected boolean isDone = false;
     }
 
-    protected HttpScheduler(HttpCore httpCore, Executor executor) {
+    protected HttpScheduler(HttpCore httpCore, CloseableExecutor executor) {
         this.httpCore = httpCore;
         this.executor = executor;
+    }
+
+    @Override
+    public void close() throws Exception {
+        this.executor.close();
     }
 
     /**
@@ -427,9 +440,18 @@ public class HttpScheduler<Executor extends java.util.concurrent.Executor> {
         return request;
     }
 
-    protected final Executor executor;
+    protected final CloseableExecutor executor;
     private final HttpCore httpCore;
 
     protected static final String TAG = HttpScheduler.class.getName();
 
+    /**
+     * Adds a {@link Runnable} to the {@link Executor} used by this scheduler instance.
+     * @apiNote This is pretty hacky and is here to support the current Push Notifications implementation.
+     *
+     * @param runnable The code to be executed.
+     */
+    public void execute(Runnable runnable) {
+        executor.execute(runnable);
+    }
 }

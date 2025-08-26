@@ -3,23 +3,27 @@ package io.ably.lib.transport;
 import io.ably.lib.BuildConfig;
 import io.ably.lib.types.ClientOptions;
 
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.util.Locale;
-
 public class Defaults {
-    /* versions */
-    public static final float ABLY_VERSION_NUMBER   = 1.2f;
-    public static final String ABLY_VERSION         = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.ENGLISH)).format(ABLY_VERSION_NUMBER);
-    public static final String ABLY_LIB_VERSION     = String.format("%s-%s", BuildConfig.LIBRARY_NAME, BuildConfig.VERSION);
+    /**
+     * The level of compatibility with the Ably service that this SDK supports.
+     * Also referred to as the 'wire protocol version'.
+     * This value is presented as a string, as specified in G4a.
+     * <p>
+     * spec: G4
+     * </p>
+     */
+    public static final String ABLY_PROTOCOL_VERSION = "2";
 
-    /* params */
-    public static final String ABLY_VERSION_PARAM   = "v";
-    public static final String ABLY_LIB_PARAM       = "lib";
+    public static final String ABLY_AGENT_VERSION   = String.format("%s/%s", "ably-java", BuildConfig.VERSION);
 
-    /* Headers */
-    public static final String ABLY_VERSION_HEADER  = "X-Ably-Version";
-    public static final String ABLY_LIB_HEADER      = "X-Ably-Lib";
+    /* realtime params */
+    public static final String ABLY_PROTOCOL_VERSION_PARAM = "v";
+    public static final String ABLY_AGENT_PARAM = "agent";
+
+    /* http headers */
+    public static final String ABLY_PROTOCOL_VERSION_HEADER = "X-Ably-Version";
+    public static final String ABLY_CLIENT_ID_HEADER = "X-Ably-ClientId";
+    public static final String ABLY_AGENT_HEADER = "Ably-Agent";
 
     /* Hosts */
     public static final String[] HOST_FALLBACKS     = { "A.ably-realtime.com", "B.ably-realtime.com", "C.ably-realtime.com", "D.ably-realtime.com", "E.ably-realtime.com" };
@@ -33,18 +37,25 @@ public class Defaults {
     public static int TIMEOUT_DISCONNECT            = 15000;
     public static int TIMEOUT_CHANNEL_RETRY         = 15000;
 
-    /* TO313 */
+    /* TO3l3 */
     public static int TIMEOUT_HTTP_OPEN = 4000;
-    /* TO314 */
-    public static int TIMEOUT_HTTP_REQUEST = 15000;
+    /* TO3l4 */
+    public static int TIMEOUT_HTTP_REQUEST = 10000;
+    /* TO3l6 */
+    public static int httpMaxRetryDuration = 15000;
+
     /* DF1b */
     public static long realtimeRequestTimeout = 10000L;
+    /* TO3l2 */
+    public static long suspendedRetryTimeout = 30000L;
     /* TO3l10 */
     public static long fallbackRetryTimeout = 10*60*1000L;
     /* CD2h (but no default in the spec) */
     public static long maxIdleInterval = 20000L;
+    // 64kB, as per CD2c
+    public static int maxMessageSize = 65536;
     /* DF1a */
-    public static long connectionStateTtl = 60000L;
+    public static long connectionStateTtl = 120000L;
 
     public static final ITransport.Factory TRANSPORT = new WebSocketTransport.Factory();
     public static final int HTTP_MAX_RETRY_COUNT    = 3;

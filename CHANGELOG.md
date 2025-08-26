@@ -1,5 +1,695 @@
 # Change Log
 
+## [1.2.54](https://github.com/ably/ably-java/tree/v1.2.54)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.53...v1.2.54)
+
+This release includes minor improvements and bug fixes.
+
+**Implemented enhancements:**
+
+- Prevents NPE in the connectivity check  [\#1111](https://github.com/ably/ably-java/issues/1111)
+- Fixes async connection state transition side effects  [\#1119](https://github.com/ably/ably-java/issues/1119)
+
+## [1.2.53](https://github.com/ably/ably-java/tree/v1.2.53)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.52...v1.2.53)
+
+**Implemented enhancements:**
+
+- Adds `ANNOTATION_PUBLISH` and `ANNOTATION_SUBSCRIBE` channel modes
+- Adds support for message annotations via `channel.annotations` 
+- The message action `meta.occupancy` is now renamed to `meta`. Similarly, `MessageActions.META_OCCUPANCY` is now `MessageActions.META`
+
+## [1.2.52](https://github.com/ably/ably-java/tree/v1.2.52)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.51...v1.2.52)
+
+**Closed issues:**
+
+- `Java-WebSocket` holds lock while invoking listeners, it may cause deadlock [\#1079](https://github.com/ably/ably-java/issues/1079)
+
+## [1.2.51](https://github.com/ably/ably-java/tree/v1.2.51)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.50...v1.2.51)
+
+**Implemented enhancements:**
+
+- Made query params URL-encoded in the request API by default [\#1075](https://github.com/ably/ably-java/issues/1075)
+- Implemented RTN11d spec point [\#1074](https://github.com/ably/ably-java/issues/1074)
+
+## [1.2.50](https://github.com/ably/ably-java/tree/v1.2.50)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.49...v1.2.50)
+
+**Closed issues:**
+
+- Warning on Android Proguard [\#1067](https://github.com/ably/ably-java/issues/1067)
+
+**Implemented enhancements:**
+
+- Added internal Kotlin Wrapper for the SDK 
+
+## [1.2.49](https://github.com/ably/ably-java/tree/v1.2.49)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.48...v1.2.49)
+
+**Closed issues:**
+
+- Support message edits and deletes  [\#1058](https://github.com/ably/ably-java/issues/1058)
+
+**Merged pull requests:**
+
+- chore: upgrade github actions versions [\#1061](https://github.com/ably/ably-java/pull/1061) ([ttypic](https://github.com/ttypic))
+- [ECO-5193] Support message edits and deletes [\#1059](https://github.com/ably/ably-java/pull/1059) ([sacOO7](https://github.com/sacOO7))
+
+## [1.2.48](https://github.com/ably/ably-java/tree/v1.2.48)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.47...v1.2.48)
+
+**Closed issues:**
+
+- Flaky realtime tests for RealtimeChannelTest [\#1055](https://github.com/ably/ably-java/issues/1055)
+- \[RTL13\] Handle server sent `DETACHED` event [\#1051](https://github.com/ably/ably-java/issues/1051)
+
+**Merged pull requests:**
+
+- \[ECO-5188\] MessageAction enum changes [\#1056](https://github.com/ably/ably-java/pull/1056) ([SimonWoolf](https://github.com/SimonWoolf))
+
+
+## [1.2.47](https://github.com/ably/ably-java/tree/v1.2.47)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.46...v1.2.47)
+
+**Fixed bugs:**
+
+- Java SDK - Duplicate messages on rewind after 1.2.34 [\#1050](https://github.com/ably/ably-java/issues/1050)
+
+## [1.2.46](https://github.com/ably/ably-java/tree/v1.2.46)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.45...v1.2.46)
+
+**Implemented enhancements:**
+
+- New experimental `Message` fields (`action`, `serial`, `createdAt`) have been added. 
+  **Note:** These fields are not stable and are introduced to support the [Chat SDK](https://github.com/ably/ably-chat-kotlin). 
+  Use with caution, as they may change in future releases.
+
+**Merged pull requests:**
+
+- \[ECO-5139\] feat: add `action` and `serial` fields [\#1048](https://github.com/ably/ably-java/pull/1048) ([ttypic](https://github.com/ttypic))
+
+
+## [1.2.45](https://github.com/ably/ably-java/tree/v1.2.45)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.44...v1.2.45)
+
+**Closed issues:**
+
+- [RTL5] Incomplete spec implementation for channel DETACH/ATTACH [\#1045](https://github.com/ably/ably-java/issues/1045)
+- [RTL7h] Throw exception for optional callback [\#1040](https://github.com/ably/ably-java/issues/1040)
+
+**Merged pull requests:**
+
+- [ECO-5117] Fix channel ATTACH/DETACH state checks [\#1046](https://github.com/ably/ably-java/pull/1046) ([sacOO7](https://github.com/sacOO7))
+
+## [1.2.44](https://github.com/ably/ably-java/tree/v1.2.44)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.43...v1.2.44)
+
+**Fixed bugs:**
+
+- Race condition when calling`AblyRealtime#connect()` on terminated state [\#1041](https://github.com/ably/ably-java/issues/1041)
+
+## [1.2.43](https://github.com/ably/ably-java/tree/v1.2.43)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.42...v1.2.43)
+
+**Implemented enhancements:**
+
+- Expand proxy support: Authenticated Proxy and Websockets \(`HTTP CONNECT` tunnel\) [\#120](https://github.com/ably/ably-java/issues/120)
+
+**Merged pull requests:**
+
+- feat: introduced retry rules for flaky android push tests [\#1036](https://github.com/ably/ably-java/pull/1036) ([ttypic](https://github.com/ttypic))
+- feat: OkHttp implementation for making HTTP calls and WebSocket connections [\#1035](https://github.com/ably/ably-java/pull/1035) ([ttypic](https://github.com/ttypic))
+- chore: update gradle wrapper [\#1034](https://github.com/ably/ably-java/pull/1034) ([ttypic](https://github.com/ttypic))
+
+## [1.2.42](https://github.com/ably/ably-java/tree/v1.2.42)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.41...v1.2.42)
+
+**Implemented enhancements:**
+
+-  Implement the `attachOnSubscribe` channel option \(TB4\) [\#1027](https://github.com/ably/ably-java/issues/1027)
+
+**Merged pull requests:**
+
+- Fix implicit attach on subscribe [\#1028](https://github.com/ably/ably-java/pull/1028) ([sacOO7](https://github.com/sacOO7))
+- ci: enable workflow\_dispatch [\#1025](https://github.com/ably/ably-java/pull/1025) ([owenpearson](https://github.com/owenpearson))
+- tests: Assert connection error code rather than message [\#1023](https://github.com/ably/ably-java/pull/1023) ([lmars](https://github.com/lmars))
+
+## [1.2.41](https://github.com/ably/ably-java/tree/v1.2.41)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.40...v1.2.41)
+
+**Closed issues:**
+
+-  For REST clients, all requests should include an `X-Ably-ClientId` header when basic auth is to be used \(RSA7e2\) [\#1015](https://github.com/ably/ably-java/issues/1015)
+
+**Merged pull requests:**
+
+- chore\(Auth\): get rid of unnecessary padding removal for Auth tokens [\#1021](https://github.com/ably/ably-java/pull/1021) ([ttypic](https://github.com/ttypic))
+- feat: add Google SDK console verification [\#1020](https://github.com/ably/ably-java/pull/1020) ([ttypic](https://github.com/ttypic))
+- feat: include `X-Ably-ClientId` for each request \(RSA7e2\) [\#1019](https://github.com/ably/ably-java/pull/1019) ([ttypic](https://github.com/ttypic))
+
+
+## [1.2.40](https://github.com/ably/ably-java/tree/v1.2.40)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.39...v1.2.40)
+
+**Fixed bugs:**
+
+- Connection remains open when close is sent immediately [\#1012](https://github.com/ably/ably-java/issues/1012)
+
+**Merged pull requests:**
+
+- \[ECO-4820\] fix\(ConnectionManager\): update the connection close implementation to follow RTN12f [\#1013](https://github.com/ably/ably-java/pull/1013) ([ttypic](https://github.com/ttypic))
+
+## [1.2.39](https://github.com/ably/ably-java/tree/v1.2.39)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.38...v1.2.39)
+
+**Fixed bugs:**
+
+- onMessage Exception [\#1009](https://github.com/ably/ably-java/issues/1009)
+- NullPointerException When Attempting to read from field 'java.lang.String io.ably.lib.types.ErrorInfo.message' [\#995](https://github.com/ably/ably-java/issues/995)
+
+## [1.2.38](https://github.com/ably/ably-java/tree/v1.2.38)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.37...v1.2.38)
+
+**Fixed bugs:**
+
+- v1.2.34-v1.2.37 are incompatible with Android API versions < 24  [\#1004](https://github.com/ably/ably-java/issues/1004)
+- REST client not attempting fallback hosts upon `httpOpenTimeout` expiry [\#997](https://github.com/ably/ably-java/issues/997)
+
+**Closed issues:**
+
+- Gracefully shutdown Ably resources [\#917](https://github.com/ably/ably-java/issues/917)
+- Read timed out [\#850](https://github.com/ably/ably-java/issues/850)
+
+## [1.2.37](https://github.com/ably/ably-java/tree/v1.2.37)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.36...v1.2.37)
+
+**Fixed bugs:**
+
+- Fix HttpRequest & HttpRetry timeouts [\#310](https://github.com/ably/ably-java/issues/310)
+
+## [1.2.36](https://github.com/ably/ably-java/tree/v1.2.36)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.35...v1.2.36)
+
+**Closed issues:**
+
+- Push Notification corner cases  [\#993](https://github.com/ably/ably-java/issues/993)
+- Protocol-v2: readd recoveryKey to make this a non-breaking change [\#868](https://github.com/ably/ably-java/issues/868)
+
+**Merged pull requests:**
+
+- \[ECO-4706\] fix: push notifications corner cases [\#994](https://github.com/ably/ably-java/pull/994) ([ttypic](https://github.com/ttypic))
+
+## [1.2.35](https://github.com/ably/ably-java/tree/v1.2.35)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.34...v1.2.35)
+
+**Closed issues:**
+
+- Enable and fix tests in RealtimePresenceTest [\#869](https://github.com/ably/ably-java/issues/869)
+
+**Merged pull requests:**
+
+- Fix presence / ignored presence tests [\#989](https://github.com/ably/ably-java/pull/989) ([sacOO7](https://github.com/sacOO7))
+
+## [1.2.34](https://github.com/ably/ably-java/tree/v1.2.34)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.33...v1.2.34)
+
+**Fixed bugs:**
+
+- Should send `DETACH` after receiving `ATTACHED` while in the `DETACHING` or `DETACHED` state \(`RTL5k`\) [\#846](https://github.com/ably/ably-java/issues/846)
+
+**Closed issues:**
+
+- LocalDevice reset will cause ClassCastException [\#985](https://github.com/ably/ably-java/issues/985)
+- Implement no-connection-serial [\#981](https://github.com/ably/ably-java/issues/981)
+- DeviceSecret key is required by protocol v2.0 [\#845](https://github.com/ably/ably-java/issues/845)
+
+**Merged pull requests:**
+
+- Fix shared pref storage [\#986](https://github.com/ably/ably-java/pull/986) ([sacOO7](https://github.com/sacOO7))
+- Feature/no connection serial [\#983](https://github.com/ably/ably-java/pull/983) ([sacOO7](https://github.com/sacOO7))
+
+## [1.2.33](https://github.com/ably/ably-java/tree/v1.2.33)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.32...v1.2.33)
+
+**Closed issues:**
+
+- Throw exception on `released` Ably Channel methods [\#971](https://github.com/ably/ably-java/issues/971)
+
+**Merged pull requests:**
+
+- fix: prevent reattaching of detached channels [\#977](https://github.com/ably/ably-java/pull/977) ([ttypic](https://github.com/ttypic))
+- feat: throw exception when trying to attach on released channel [\#973](https://github.com/ably/ably-java/pull/973) ([ttypic](https://github.com/ttypic))
+- fix: deviceId and deviceToken consistence [\#972](https://github.com/ably/ably-java/pull/972) ([ttypic](https://github.com/ttypic))
+
+## [1.2.32](https://github.com/ably/ably-java/tree/v1.2.32)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.31...v1.2.32)
+
+**Fixed bugs:**
+
+- Create Cipher instance in place, do not store it in `ChannelOptions` [\#969](https://github.com/ably/ably-java/pull/969)
+- Late Disconnection [\#937](https://github.com/ably/ably-java/issues/937)
+
+**Closed issues:**
+
+- Stack traces not being sent to error logs [\#963](https://github.com/ably/ably-java/issues/963)
+
+## [1.2.31](https://github.com/ably/ably-java/tree/v1.2.31)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.30...v1.2.31)
+
+**Fixed bugs:**
+
+- Update error code for channel attachment timed out [\#959](https://github.com/ably/ably-java/issues/959)
+- Update error code for message decoding failure [\#958](https://github.com/ably/ably-java/issues/958)
+- Fix incremental backoff while reconnecting [\#954](https://github.com/ably/ably-java/issues/954)
+- Add `suspendedRetryTimeout` and `httpMaxRetryDuration` client options [\#956](https://github.com/ably/ably-java/issues/956)
+
+**Merged pull requests:**
+
+- fix: use appropriate error code for channel attachment timeout [\#961](https://github.com/ably/ably-java/pull/961) ([AndyTWF](https://github.com/AndyTWF))
+- fix: use error code 40013 for message decoding failures [\#960](https://github.com/ably/ably-java/pull/960) ([AndyTWF](https://github.com/AndyTWF))
+- Fix incremental backoff jitter [\#955](https://github.com/ably/ably-java/pull/955) ([sacOO7](https://github.com/sacOO7))
+- Add missing clientOptions [\#957](https://github.com/ably/ably-java/pull/957) ([sacOO7](https://github.com/sacOO7))
+
+## [1.2.30](https://github.com/ably/ably-java/tree/v1.2.30)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.29...v1.2.30)
+
+**Fixed bugs:**
+
+- Connection manager switches to fallback hosts on close [\#950](https://github.com/ably/ably-java/issues/950)
+
+**Merged pull requests:**
+
+- fix: fallback hosts always being used on transport error [\#951](https://github.com/ably/ably-java/pull/951) ([AndyTWF](https://github.com/AndyTWF))
+
+## [1.2.29](https://github.com/ably/ably-java/tree/v1.2.29)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.28...v1.2.29)
+
+**Fixed bugs:**
+
+- RTN23a: Transport not disconnecting after TTL passed [\#932](https://github.com/ably/ably-java/issues/932)
+
+**Merged pull requests:**
+
+- fix: transport not disconnecting after ttl passed [\#939](https://github.com/ably/ably-java/pull/939) ([AndyTWF](https://github.com/AndyTWF))
+- fix\(ConnectionManager\): don't check state before sending close message [\#938](https://github.com/ably/ably-java/pull/938) ([owenpearson](https://github.com/owenpearson))
+
+## [1.2.28](https://github.com/ably/ably-java/tree/v1.2.28)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.27...v1.2.28)
+
+**Fixed bugs:**
+
+- Realtime with authUrl with token in query string fails to connect [\#935](https://github.com/ably/ably-java/issues/935)
+
+## [1.2.27](https://github.com/ably/ably-java/tree/v1.2.27)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.26...v1.2.27)
+
+**Fixed bugs:**
+
+- equals\(\) for TokenDetails is broken [\#926](https://github.com/ably/ably-java/issues/926)
+- Long-lived connections are immediately transitioned to `SUSPENDED` after disconnection [\#925](https://github.com/ably/ably-java/issues/925)
+
+**Merged pull requests:**
+
+- Suspend timer is set when transport is unavailable and last state was connected [\#928](https://github.com/ably/ably-java/pull/928) ([AndyTWF](https://github.com/AndyTWF))
+- Fix equals\(\) on token details  [\#927](https://github.com/ably/ably-java/pull/927) ([ikbalkaya](https://github.com/ikbalkaya))
+
+
+## [1.2.26](https://github.com/ably/ably-java/tree/v1.2.26)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.25...v1.2.26)
+
+**Fixed bugs:**
+
+- Provide an error code and error message for failed queued messages [\#920](https://github.com/ably/ably-java/issues/920)
+
+**Merged pull requests:**
+
+- Add reason to pending message instead of creating an ErrorInfo [\#922](https://github.com/ably/ably-java/pull/922) ([ikbalkaya](https://github.com/ikbalkaya))
+
+## [1.2.25](https://github.com/ably/ably-java/tree/v1.2.25)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.24...v1.2.25)
+
+**Fixed bugs:**
+
+- Released channel re-added to the channel map after DETACHED message [\#913](https://github.com/ably/ably-java/issues/913)
+
+**Merged pull requests:**
+
+- Drop messages where channel does not exist [\#914](https://github.com/ably/ably-java/pull/914) ([AndyTWF](https://github.com/AndyTWF))
+- Improve `1.2`-series Release Process [\#912](https://github.com/ably/ably-java/pull/912) ([QuintinWillison](https://github.com/QuintinWillison))
+- Fix link formatting in changelog [\#911](https://github.com/ably/ably-java/pull/911) ([AndyTWF](https://github.com/AndyTWF))
+
+## [1.2.24](https://github.com/ably/ably-java/tree/v1.2.24)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.23...v1.2.24)
+
+**Fixed bugs:**
+
+- Presence messages superseded whilst channel in attaching state [\#908](https://github.com/ably/ably-java/issues/908)
+- A failed resume incorrectly retries queued messages prior to reattachment [\#905](https://github.com/ably/ably-java/issues/905)
+- Pending messages are not failed when transitioning to suspended [\#904](https://github.com/ably/ably-java/issues/904)
+
+**Merged pull requests:**
+
+- Presence message superseded [\#909](https://github.com/ably/ably-java/pull/909) ([AndyTWF](https://github.com/AndyTWF))
+- Improvements on connection resume failure [\#906](https://github.com/ably/ably-java/pull/906) ([ikbalkaya](https://github.com/ikbalkaya))
+
+
+## [1.2.23](https://github.com/ably/ably-java/tree/v1.2.23)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.22...v1.2.23)
+
+**Fixed bugs:**
+
+- Re-attach fails due to previous detach request [\#885](https://github.com/ably/ably-java/issues/885)
+- Lib is not re-sending pending messages on new transport after a resume [\#474](https://github.com/ably/ably-java/issues/474)
+
+**Merged pull requests:**
+
+- Connection resumption improvements [\#900](https://github.com/ably/ably-java/pull/900) ([ikbalkaya](https://github.com/ikbalkaya))
+- Make EventEmitter.on\(\) documentation reflect implementation [\#889](https://github.com/ably/ably-java/pull/889) ([AndyTWF](https://github.com/AndyTWF))
+- Fix attach/detach race condition [\#887](https://github.com/ably/ably-java/pull/887) ([ikbalkaya](https://github.com/ikbalkaya))
+
+## [1.2.22](https://github.com/ably/ably-java/tree/v1.2.22)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.21...v1.2.22)
+
+**Merged pull requests:**
+
+- Skip checking WS hostname when not using SSL [\#883](https://github.com/ably/ably-java/pull/883) ([cruickshankpg](https://github.com/cruickshankpg))
+
+## [1.2.21](https://github.com/ably/ably-java/tree/v1.2.21)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.20...v1.2.21)
+
+**Fixed bugs:**
+
+- Presence.endSync throws NullPointerException when processing a message [\#853](https://github.com/ably/ably-java/issues/853)
+
+**Merged pull requests:**
+
+- added null check to prevent NullPointerExceptions [\#873](https://github.com/ably/ably-java/pull/873) ([davyskiba](https://github.com/davyskiba))
+
+## [1.2.20](https://github.com/ably/ably-java/tree/v1.2.20)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.19...v1.2.20)
+
+Sorry for the release noise, but the big fix we thought we had made in [1.2.19](https://github.com/ably/ably-java/releases/tag/v1.2.19) turned out not to fix the problem...
+
+**Second Attempt at Bug Fix:**
+Automatic presence re-enter after network connection is back does not work [\#857](https://github.com/ably/ably-java/issues/857) in Revert to protocol 1.0 [\#864](https://github.com/ably/ably-java/pull/864) ([QuintinWillison](https://github.com/QuintinWillison))
+
+## [1.2.19](https://github.com/ably/ably-java/tree/v1.2.19)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.18...v1.2.19)
+
+**Implemented enhancements:**
+
+- Implement incremental backoff and jitter [\#795](https://github.com/ably/ably-java/issues/795) in [\#852](https://github.com/ably/ably-java/pull/852) ([qsdigor](https://github.com/qsdigor))
+
+**Fixed bugs:**
+
+- Automatic presence re-enter after network connection is back does not work [\#857](https://github.com/ably/ably-java/issues/857) in Revert to protocol 1.1 [\#858](https://github.com/ably/ably-java/pull/858) ([KacperKluka](https://github.com/KacperKluka))
+
+## [1.2.18](https://github.com/ably/ably-java/tree/v1.2.18)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.17...v1.2.18)
+
+This release improves our Javadoc API commentaries for this SDK.
+Other than that, there are no functional changes (features, bug fixes, etc..).
+
+## [1.2.17](https://github.com/ably/ably-java/tree/v1.2.17)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.16...v1.2.17)
+
+**Fixed bugs:**
+
+- RSA4d is not implemented correctly [\#829](https://github.com/ably/ably-java/issues/829)
+- JSONUtilsObject.add() silently discards data of unsupported type [\#501](https://github.com/ably/ably-java/issues/501)
+
+**Merged pull requests:**
+
+- Fail Ably connection if auth callback throws specific errors [\#834](https://github.com/ably/ably-java/pull/834) ([KacperKluka](https://github.com/KacperKluka))
+
+## [1.2.16](https://github.com/ably/ably-java/tree/v1.2.16)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.15...v1.2.16)
+
+In this release, we have fixed a bug that was introduced in 1.2.15 that caused the SDK to return early from the 
+`Auth#renewAuth` method.
+
+- call waiter.close() after breaking from while loop [\#825](https://github.com/ably/ably-java/pull/825) ([ikbalkaya](https://github.com/ikbalkaya))
+
+
+## [1.2.15](https://github.com/ably/ably-java/tree/v1.2.15)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.14...v1.2.15)
+
+In this release we have added a new method that provides a completion handler for renewing an authentication token. 
+We also updated the documentation to clarify the thread policy for public method callbacks. 
+
+- A new `renewAuth` method was added to `Auth` and the `renew` method was deprecated
+
+**Implemented enhancements:**
+
+- Add new renew async method [\#816](https://github.com/ably/ably-java/pull/816) ([ikbalkaya](https://github.com/ikbalkaya))
+
+**Fixed bugs:**
+
+- Early return from  onAuthUpdated creates issues [\#814](https://github.com/ably/ably-java/issues/814)
+
+**Closed issues:**
+
+- Invalid method implementation in README [\#819](https://github.com/ably/ably-java/issues/819)
+- Document which thread is whole SDK or callbacks using [\#800](https://github.com/ably/ably-java/issues/800)
+
+**Merged pull requests:**
+
+- Update onChannelStateChanged readme with current implementation [\#820](https://github.com/ably/ably-java/pull/820) ([qsdigor](https://github.com/qsdigor))
+- Document thread policy for callbacks and add missing documentation for callbacks [\#818](https://github.com/ably/ably-java/pull/818) ([qsdigor](https://github.com/qsdigor))
+
+## [v1.2.14](https://github.com/ably/ably-java/tree/v1.2.14)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.13...v1.2.14)
+
+We've made some changes to JDK and Android API Level minimum requirements in this release,
+which might cause problems for those with very old build toolchains,
+or application projects with really permissive minimum runtime requirements:
+
+- Java source and target compatibility level increased from 1.7 to **1.8**
+- Android minimum SDK API Level increased from 16 to **19 (4.4 KitKat)**
+
+We've also fixed an oversight in our REST support whereby it previously was not possible to fully release resources
+consumed by the background thread pool used for HTTP operations, neither explicitly nor passively via GC.
+This was most noticeably a problem for applications which created several client instances during the lifespan of
+their application process.
+
+**Fixed bugs:**
+
+- NoSuchMethodError in ably-android for API lower than 24 [\#802](https://github.com/ably/ably-java/issues/802), fixed by [\#808](https://github.com/ably/ably-java/pull/808) ([KacperKluka](https://github.com/KacperKluka))
+- Threads remain in parked \(waiting\) state indefinitely when `AblyRest` instance is freed [\#801](https://github.com/ably/ably-java/issues/801), addressed by adding `finalize()` and `AutoCloseable` support to `AblyRest` instances [\#807](https://github.com/ably/ably-java/pull/807) ([QuintinWillison](https://github.com/QuintinWillison))
+- Minimum API Level supported for Android is 19 \(KitKat, v.4.4\) [\#804](https://github.com/ably/ably-java/pull/804) ([QuintinWillison](https://github.com/QuintinWillison))
+
+**Merged pull requests:**
+
+- Increase minimum JRE version to 1.8 [\#805](https://github.com/ably/ably-java/pull/805) ([QuintinWillison](https://github.com/QuintinWillison))
+
+## [v1.2.13](https://github.com/ably/ably-java/tree/v1.2.13)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.12...v1.2.13)
+
+**Closed issues:**
+
+- Update dependency: com.google.code.gson:gson [\#777](https://github.com/ably/ably-java/issues/777)
+- Update dependency: org.java-websocket:Java-WebSocket [\#776](https://github.com/ably/ably-java/issues/776)
+
+## [v1.2.12](https://github.com/ably/ably-java/tree/v1.2.12)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.11...v1.2.12)
+
+**Fixed bugs:**
+
+- Cannot automatically re-enter channel due to mismatched connectionId [\#761](https://github.com/ably/ably-java/issues/761)
+- Ensure that weak SSL/TLS protocols are not used [\#749](https://github.com/ably/ably-java/issues/749)
+
+## [v1.2.11](https://github.com/ably/ably-java/tree/v1.2.11)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.10...v1.2.11)
+
+**Fixed bugs:**
+
+- `ConcurrentModificationException` when `unsubscribe` then `detach` channel presence listener [\#743](https://github.com/ably/ably-java/issues/743), fixed in [\#744](https://github.com/ably/ably-java/pull/744) ([QuintinWillison](https://github.com/QuintinWillison))
+- `IllegalStateException` in `Crypto` `CBCCipher`'s `decrypt` method [\#741](https://github.com/ably/ably-java/issues/741), fixed in [\#746](https://github.com/ably/ably-java/pull/746) ([QuintinWillison](https://github.com/QuintinWillison))
+- Incorrect use of locale sensitive String APIs [\#713](https://github.com/ably/ably-java/issues/713), fixed in [\#722](https://github.com/ably/ably-java/pull/722) ([martin-morek](https://github.com/martin-morek))
+- `push.listSubscriptionsImpl` method not respecting params [\#705](https://github.com/ably/ably-java/issues/705), fixed in [\#710](https://github.com/ably/ably-java/pull/710) ([martin-morek](https://github.com/martin-morek))
+
+**Other merged pull requests:**
+
+- Fix indentation and typos in authCallback example [\#724](https://github.com/ably/ably-java/pull/724) ([QuintinWillison](https://github.com/QuintinWillison))
+
+## [v1.2.10](https://github.com/ably/ably-java/tree/v1.2.10)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.9...v1.2.10)
+
+**Fixed bugs:**
+
+- Using Firebase installation ID as registration token: Users cannot reactivate the device after deactivating [\#715](https://github.com/ably/ably-java/issues/715)
+
+**Merged pull requests:**
+
+- Fix: Use `FirebaseMessaging\#getToken\(\)` to get registration token [\#717](https://github.com/ably/ably-java/pull/717) ([ben-xD](https://github.com/ben-xD))
+
+## [v1.2.9](https://github.com/ably/ably-java/tree/v1.2.9)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.8...v1.2.9)
+
+**Fixed bugs:**
+
+- IllegalArgumentException: No enum constant io.ably.lib.http.HttpAuth.Type.BASİC [\#711](https://github.com/ably/ably-java/issues/711)
+- ProGuard warnings emitted by Android build against 1.1.6 [\#529](https://github.com/ably/ably-java/issues/529)
+
+**Merged pull requests:**
+
+- Fix incorrect parsing of HTTP auth type for some locales [\#712](https://github.com/ably/ably-java/pull/712) ([QuintinWillison](https://github.com/QuintinWillison))
+- Suppressed warning in ProGuard [\#709](https://github.com/ably/ably-java/pull/709) ([martin-morek](https://github.com/martin-morek))
+
+## [v1.2.8](https://github.com/ably/ably-java/tree/v1.2.8)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.7...v1.2.8)
+
+**Implemented enhancements:**
+
+- Update Stats fields with latest MessageTraffic types [\#394](https://github.com/ably/ably-java/issues/394)
+- Replace ULID with Android's UUID [\#680](https://github.com/ably/ably-java/issues/680)
+
+**Fixed bugs:**
+
+- Push Activation State Machine exception handling needs improvement [\#685](https://github.com/ably/ably-java/issues/685)
+- WebsocketNotConnectedException on send [\#430](https://github.com/ably/ably-java/issues/430)
+
+**Merged pull requests:**
+
+- Replaced ULID with UUID for deviceID [\#702](https://github.com/ably/ably-java/pull/702) ([martin-morek](https://github.com/martin-morek))
+- Separate handling WebsocketNotConnectedException [\#701](https://github.com/ably/ably-java/pull/701) ([martin-morek](https://github.com/martin-morek))
+- Updated Stats fields with the latest MessageTraffic types [\#698](https://github.com/ably/ably-java/pull/698) ([martin-morek](https://github.com/martin-morek))
+
+## [v1.2.7](https://github.com/ably/ably-java/tree/v1.2.7)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.6...v1.2.7)
+
+**Implemented enhancements:**
+
+- Implement RSC7d \(Ably-Agent header\) [\#665](https://github.com/ably/ably-java/issues/665)
+- Conform toString\(\) implementations [\#631](https://github.com/ably/ably-java/issues/631)
+
+**Fixed bugs:**
+
+- Remove use of forClass method in push activation state machine implementation [\#686](https://github.com/ably/ably-java/issues/686)
+- Race condition releasing short lived channels [\#570](https://github.com/ably/ably-java/issues/570)
+- Using a clientId should no longer be forcing token auth in the 1.1 spec [\#473](https://github.com/ably/ably-java/issues/473)
+- Ensure correct feedback to developer when malformed key is supplied [\#382](https://github.com/ably/ably-java/issues/382)
+
+**Closed issues:**
+
+- Fail connection immediately if authorize\(\) called and 403 returned [\#620](https://github.com/ably/ably-java/issues/620)
+- FCM getToken method is deprecated [\#597](https://github.com/ably/ably-java/issues/597)
+- Support for encryption of shared preferences [\#593](https://github.com/ably/ably-java/issues/593)
+- RSC7c TI1 addRequestIds on ClientOptions and requestId on ErrorInfo [\#574](https://github.com/ably/ably-java/issues/574)
+
+**Merged pull requests:**
+
+- Increase minimum SDK version to Android 4.1 \(Jelly Bean, API Level 16\) [\#691](https://github.com/ably/ably-java/pull/691) ([KacperKluka](https://github.com/KacperKluka))
+- Throws exception when AuthOptions are initialized with an empty string [\#690](https://github.com/ably/ably-java/pull/690) ([martin-morek](https://github.com/martin-morek))
+- Removed forName method  [\#689](https://github.com/ably/ably-java/pull/689) ([martin-morek](https://github.com/martin-morek))
+- Updated Firebase cloud messaging dependency [\#687](https://github.com/ably/ably-java/pull/687) ([martin-morek](https://github.com/martin-morek))
+- Unified custom toString\(\) method implementations to use curly bracket… [\#683](https://github.com/ably/ably-java/pull/683) ([martin-morek](https://github.com/martin-morek))
+- Support for encryption of shared preferences [\#681](https://github.com/ably/ably-java/pull/681) ([martin-morek](https://github.com/martin-morek))
+- Add request\_id query param if addRequestIds is enabled [\#678](https://github.com/ably/ably-java/pull/678) ([martin-morek](https://github.com/martin-morek))
+- Using a clientId should no longer be forcing token auth [\#675](https://github.com/ably/ably-java/pull/675) ([martin-morek](https://github.com/martin-morek))
+- Checking if error code is 403 and failing connection [\#672](https://github.com/ably/ably-java/pull/672) ([martin-morek](https://github.com/martin-morek))
+- Add Ably-Agent header [\#671](https://github.com/ably/ably-java/pull/671) ([KacperKluka](https://github.com/KacperKluka))
+- Changing Capability.addResource\(\) to take varargs as last parameter [\#664](https://github.com/ably/ably-java/pull/664) ([Thunderforge](https://github.com/Thunderforge))
+
+## [v1.2.6](https://github.com/ably/ably-java/tree/v1.2.6)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.5...v1.2.6)
+
+**Fixed bug:** channel presence members [\#669](https://github.com/ably/ably-java/pull/669) ([sacOO7](https://github.com/sacOO7))  
+An issue affecting only users calling `get(boolean wait)` on `Presence` with `wait` set to `true`.
+
+## [v1.2.5](https://github.com/ably/ably-java/tree/v1.2.5)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.4...v1.2.5)
+
+**Fixed bugs:**
+
+- Crypto.getRandomMessageId isn't working as intended [\#654](https://github.com/ably/ably-java/issues/654)
+- Hosts class is not thread safe [\#650](https://github.com/ably/ably-java/issues/650)
+- AblyBase.InternalChannels is not thread-safe [\#649](https://github.com/ably/ably-java/issues/649)
+
+**Merged pull requests:**
+
+- Makes the Hosts class safe to be called from any thread [\#657](https://github.com/ably/ably-java/pull/657) ([QuintinWillison](https://github.com/QuintinWillison))
+- Fix getRandomMessageId [\#656](https://github.com/ably/ably-java/pull/656) ([sacOO7](https://github.com/sacOO7))
+- Improve channel map operations in respect of thread-safety [\#655](https://github.com/ably/ably-java/pull/655) ([QuintinWillison](https://github.com/QuintinWillison))
+
+## [v1.2.4](https://github.com/ably/ably-java/tree/v1.2.4)
+
+[Full Changelog](https://github.com/ably/ably-java/compare/v1.2.3...v1.2.4)
+
+**Fixed bugs:**
+
+- Many instances of ConnectionWaiter spawned while app is running, with authentication token flow [\#651](https://github.com/ably/ably-java/issues/651)
+- capability tokendetails adds to HTTP Request as a query parameter [\#647](https://github.com/ably/ably-java/issues/647)
+- ClientOptions idempotentRestPublishing default may be wrong [\#590](https://github.com/ably/ably-java/issues/590)
+- Presence blocking get sometimes has missing members [\#467](https://github.com/ably/ably-java/issues/467)
+- Remove empty capability query parameter [\#648](https://github.com/ably/ably-java/pull/648) ([vzhikserg](https://github.com/vzhikserg))
+- Add unit test for idempotentRestPublishing in ClientOptions [\#636](https://github.com/ably/ably-java/pull/636) ([vzhikserg](https://github.com/vzhikserg))
+- Fix Member Presence [\#607](https://github.com/ably/ably-java/pull/607) ([sacOO7](https://github.com/sacOO7))
+
+**Merged pull requests:**
+
+- Unregister ConnectionWaiter listeners once connected [\#652](https://github.com/ably/ably-java/pull/652) ([QuintinWillison](https://github.com/QuintinWillison))
+- Update references from 1 -\> l to match client spec [\#646](https://github.com/ably/ably-java/pull/646) ([natdempk](https://github.com/natdempk))
+- Add workflow status badges [\#645](https://github.com/ably/ably-java/pull/645) ([QuintinWillison](https://github.com/QuintinWillison))
+- Add maintainers file [\#644](https://github.com/ably/ably-java/pull/644) ([niksilver](https://github.com/niksilver))
+- Add workflows [\#643](https://github.com/ably/ably-java/pull/643) ([QuintinWillison](https://github.com/QuintinWillison))
+- Fix CI pipeline [\#642](https://github.com/ably/ably-java/pull/642) ([vzhikserg](https://github.com/vzhikserg))
+- Fix/doc 233 update readme [\#641](https://github.com/ably/ably-java/pull/641) ([tbedford](https://github.com/tbedford))
+- Log error message to get clear understanding of exception [\#632](https://github.com/ably/ably-java/pull/632) ([sacOO7](https://github.com/sacOO7))
+- Refactor MessageExtras [\#595](https://github.com/ably/ably-java/pull/595) ([sacOO7](https://github.com/sacOO7))
+
 ## [v1.2.3](https://github.com/ably/ably-java/tree/v1.2.3)
 
 [Full Changelog](https://github.com/ably/ably-java/compare/v1.2.2...v1.2.3)

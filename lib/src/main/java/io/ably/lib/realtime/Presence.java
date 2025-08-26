@@ -1,6 +1,7 @@
 package io.ably.lib.realtime;
 
 import io.ably.lib.http.BasePaginatedQuery;
+import io.ably.lib.http.Http;
 import io.ably.lib.http.HttpCore;
 import io.ably.lib.http.HttpUtils;
 import io.ably.lib.transport.ConnectionManager;
@@ -8,12 +9,15 @@ import io.ably.lib.types.AblyException;
 import io.ably.lib.types.AsyncPaginatedResult;
 import io.ably.lib.types.Callback;
 import io.ably.lib.types.ErrorInfo;
+import io.ably.lib.types.MessageDecodeException;
 import io.ably.lib.types.PaginatedResult;
 import io.ably.lib.types.Param;
 import io.ably.lib.types.PresenceMessage;
 import io.ably.lib.types.PresenceSerializer;
 import io.ably.lib.types.ProtocolMessage;
 import io.ably.lib.util.Log;
+import io.ably.lib.util.StringUtils;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -22,12 +26,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * A class that provides access to presence operations and state for the
- * associated Channel.
+ * Enables the presence set to be entered and subscribed to, and the historic presence set to be retrieved for a channel.
  */
 public class Presence {
 
@@ -43,13 +46,25 @@ public class Presence {
     public final static String GET_CONNECTIONID = "connectionId";
 
     /**
-     * Get the presence state for this channel. Take Param[] array as an argument.
-     * Implicitly attaches the channel. However, if the channel is in or moves to the FAILED
-     * state before the operation succeeds, it will result in an error
-     * @param params
-     * @return
+     * Retrieves the current members present on the channel and the metadata for each member,
+     * such as their {@link io.ably.lib.types.PresenceMessage.Action} and ID.
+     * Returns an array of {@link PresenceMessage} objects.
+     * <p>
+     * Spec: RTP11
+     * @param params the request params:
+     * <p>
+     * waitForSync (RTP11c1) - Sets whether to wait for a full presence set synchronization between Ably and the clients on
+     *               the channel to complete before returning the results.
+     *               Synchronization begins as soon as the channel is {@link ChannelState#attached}.
+     *               When set to true the results will be returned as soon as the sync is complete.
+     *               When set to false the current list of members will be returned without the sync completing.
+     *               The default is true.
+     * <p>
+     * clientId (RTP11c2) - Filters the array of returned presence members by a specific client using its ID.
+     * <p>
+     * connectionId (RTP11c3) - Filters the array of returned presence members by a specific connection using its ID.
+     * @return An array of {@link PresenceMessage} objects.
      * @throws AblyException
-     * @throws InterruptedException
      */
     public synchronized PresenceMessage[] get(Param... params) throws AblyException {
         if (channel.state == ChannelState.failed) {
@@ -61,16 +76,24 @@ public class Presence {
             Collection<PresenceMessage> values = presence.get(params);
             return values.toArray(new PresenceMessage[values.size()]);
         } catch (InterruptedException e) {
-            Log.v(TAG, String.format("Channel %s: get() operation interrupted", channel.name));
+            Log.v(TAG, String.format(Locale.ROOT, "Channel %s: get() operation interrupted", channel.name));
             throw AblyException.fromThrowable(e);
         }
     }
 
     /**
-     * Get the presence state for this Channel, optionally waiting for sync to complete.
-     * Implicitly attaches the Channel. However, if the channel is in or moves to the FAILED
-     * state before the operation succeeds, it will result in an error
-     * @return: the current present members.
+     * Retrieves the current members present on the channel and the metadata for each member,
+     * such as their {@link io.ably.lib.types.PresenceMessage.Action} and ID.
+     * Returns an array of {@link PresenceMessage} objects.
+     * <p>
+     * Spec: RTP11
+     * @param wait (RTP11c1) - Sets whether to wait for a full presence set synchronization between Ably and the clients on
+     *               the channel to complete before returning the results.
+     *               Synchronization begins as soon as the channel is {@link ChannelState#attached}.
+     *               When set to true the results will be returned as soon as the sync is complete.
+     *               When set to false the current list of members will be returned without the sync completing.
+     *               The default is true.
+     * @return An array of {@link PresenceMessage} objects.
      * @throws AblyException
      */
     public synchronized PresenceMessage[] get(boolean wait) throws AblyException {
@@ -78,16 +101,30 @@ public class Presence {
     }
 
     /**
-     * Get the presence state for a given clientId. Implicitly attaches the
-     * Channel. However, if the channel is in or moves to the FAILED
-     * state before the operation succeeds, it will result in an error
-     * @param wait
-     * @return
-     * @throws InterruptedException
+     * Retrieves the current members present on the channel and the metadata for each member,
+     * such as their {@link io.ably.lib.types.PresenceMessage.Action} and ID.
+     * Returns an array of {@link PresenceMessage} objects.
+     * <p>
+     * Spec: RTP11
+     * @param clientId (RTP11c2) - Filters the array of returned presence members by a specific client using its ID.
+     * @param wait (RTP11c1) - Sets whether to wait for a full presence set synchronization between Ably and the clients on
+     *               the channel to complete before returning the results.
+     *               Synchronization begins as soon as the channel is {@link ChannelState#attached}.
+     *               When set to true the results will be returned as soon as the sync is complete.
+     *               When set to false the current list of members will be returned without the sync completing.
+     *               The default is true.
+     * @return An array of {@link PresenceMessage} objects.
      * @throws AblyException
      */
     public synchronized PresenceMessage[] get(String clientId, boolean wait) throws AblyException {
         return get(new Param(GET_WAITFORSYNC, String.valueOf(wait)), new Param(GET_CLIENTID, clientId));
+    }
+
+    void addPendingPresence(PresenceMessage presenceMessage, CompletionListener listener) {
+        synchronized(channel) {
+            final QueuedPresence queuedPresence = new QueuedPresence(presenceMessage,listener);
+            pendingPresence.add(queuedPresence);
+        }
     }
 
     /**
@@ -98,10 +135,17 @@ public class Presence {
     }
 
     /**
-     * Subscribe to presence events on the associated Channel. This implicitly
-     * attaches the Channel if it is not already attached.
-     * @param listener the listener to me notified on arrival of presence messages.
-     * @param completionListener listener to be called on success/failure
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
+     *
+     * <p>
+     * Spec: RTP6a
+     *
+     * @param listener An event listener function.
+     * @param completionListener A callback to be notified of success or failure of the channel {@link Channel#attach()} operation.
+     * <p></p>
+     * These listeners are invoked on a background thread.
      * @throws AblyException
      */
     public void subscribe(PresenceListener listener, CompletionListener completionListener) throws AblyException {
@@ -110,15 +154,27 @@ public class Presence {
     }
 
     /**
-     * Same as above without completion listener
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
+     *
+     * <p>
+     * Spec: RTP6a
+     *
+     * @param listener An event listener function.
+     * <p>
+     * This listener is invoked on a background thread.
+     * @throws AblyException
      */
     public void subscribe(PresenceListener listener) throws AblyException {
         subscribe(listener, null);
     }
 
     /**
-     * Unsubscribe a previously subscribed presence listener for this channel.
-     * @param listener the previously subscribed listener.
+     * Deregisters a specific listener that is registered to receive {@link PresenceMessage} on the channel.
+     * <p>
+     * Spec: RTP7a
+     * @param listener An event listener function.
      */
     public void unsubscribe(PresenceListener listener) {
         listeners.remove(listener);
@@ -128,12 +184,18 @@ public class Presence {
     }
 
     /**
-     * Subscribe to presence events with a specific action on the associated Channel.
-     * This implicitly attaches the Channel if it is not already attached.
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
      *
-     * @param action to be observed
-     * @param listener
-     * @param completionListener listener to be called on success/failure
+     * <p>
+     * Spec: RTP6b
+     *
+     * @param action A {@link PresenceMessage.Action} to register the listener for.
+     * @param listener An event listener function.
+     * @param completionListener A callback to be notified of success or failure of the channel {@link Channel#attach()} operation.
+     * <p></p>
+     * These listeners are invoked on a background thread.
      * @throws AblyException
      */
     public void subscribe(PresenceMessage.Action action, PresenceListener listener, CompletionListener completionListener) throws AblyException {
@@ -142,29 +204,48 @@ public class Presence {
     }
 
     /**
-     * Same as above without completion listener
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
+     *
+     * <p>
+     * Spec: RTP6b
+     *
+     * @param action A {@link PresenceMessage.Action} to register the listener for.
+     * @param listener An event listener function.
+     * <p>
+     * This listener is invoked on a background thread.
+     * @throws AblyException
      */
     public void subscribe(PresenceMessage.Action action, PresenceListener listener) throws AblyException {
         subscribe(action, listener, null);
     }
 
     /**
-     * Unsubscribe a previously subscribed presence listener for this channel from specific action.
-     *
-     * @param action
-     * @param listener
+     * Deregisters a specific listener that is registered to receive
+     * {@link PresenceMessage} on the channel for a given {@link PresenceMessage.Action}.
+     * <p>
+     * Spec: RTP7b
+     * @param action A specific {@link PresenceMessage.Action} to deregister the listener for.
+     * @param listener An event listener function.
      */
     public void unsubscribe(PresenceMessage.Action action, PresenceListener listener) {
         unsubscribeImpl(action, listener);
     }
 
     /**
-     * Subscribe to presence events with specific actions on the associated Channel.
-     * This implicitly attaches the Channel if it is not already attached.
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
      *
-     * @param actions to be observed
-     * @param listener
-     * @param completionListener listener to be called on success/failure
+     * <p>
+     * Spec: RTP6b
+     *
+     * @param actions An array of {@link PresenceMessage.Action} to register the listener for.
+     * @param listener An event listener function.
+     * @param completionListener A callback to be notified of success or failure of the channel {@link Channel#attach()} operation.
+     * <p></p>
+     * These listeners are invoked on a background thread.
      * @throws AblyException
      */
     public void subscribe(EnumSet<PresenceMessage.Action> actions, PresenceListener listener, CompletionListener completionListener) throws AblyException {
@@ -175,17 +256,30 @@ public class Presence {
     }
 
     /**
-     * Same as above without completion listener
+     * Registers a listener that is called each time a {@link PresenceMessage} matching a given {@link PresenceMessage.Action},
+     * or an action within an array of {@link PresenceMessage.Action}, is received on the channel,
+     * such as a new member entering the presence set.
+     *
+     * <p>
+     * Spec: RTP6b
+     *
+     * @param actions An array of {@link PresenceMessage.Action} to register the listener for.
+     * @param listener An event listener function.
+     * <p></p>
+     * These listeners are invoked on a background thread.
+     * @throws AblyException
      */
     public void subscribe(EnumSet<PresenceMessage.Action> actions, PresenceListener listener) throws AblyException {
         subscribe(actions, listener, null);
     }
 
     /**
-     * Unsubscribe a previously subscribed presence listener for this channel from specific actions.
-     *
-     * @param actions
-     * @param listener
+     * Deregisters a specific listener that is registered to receive
+     * {@link PresenceMessage} on the channel for a given {@link PresenceMessage.Action}.
+     * <p>
+     * Spec: RTP7b
+     * @param actions An array of specific {@link PresenceMessage.Action} to deregister the listener for.
+     * @param listener An event listener function.
      */
     public void unsubscribe(EnumSet<PresenceMessage.Action> actions, PresenceListener listener) {
         for (PresenceMessage.Action action : actions) {
@@ -194,28 +288,35 @@ public class Presence {
     }
 
     /**
-     * Unsubscribe all subscribed presence lisceners for this channel.
+     * Deregisters all listeners currently receiving {@link PresenceMessage} for the channel.
+     * <p>
+     * Spec: RTP7a, RTE5
      */
     public void unsubscribe() {
         listeners.clear();
         eventListeners.clear();
     }
 
-
-    /***
-     * internal
-     *
-     */
-
     /**
-     * Implicitly attach channel on subscribe. Throw exception if channel is in failed state
-     * @param completionListener
-     * @throws AblyException
+     * Implicitly attach channel on subscribe. Throw exception if channel is in failed state.
+     * @param completionListener Registers listener, gets called when ATTACH operation is a success.
+     * @throws AblyException Throws exception when channel is in failed state.
      */
     private void implicitAttachOnSubscribe(CompletionListener completionListener) throws AblyException {
+        // RTP6e
+        if (!channel.attachOnSubscribeEnabled()) {
+            if (completionListener != null) {
+                String errorString = String.format(
+                    "Channel %s: attachOnSubscribe=false doesn't expect attach completion callback", channel.name);
+                Log.e(TAG, errorString);
+                ErrorInfo errorInfo = new ErrorInfo(errorString, 400,40000);
+                throw AblyException.fromErrorInfo(errorInfo);
+            }
+            return;
+        }
         if (channel.state == ChannelState.failed) {
-            String errorString = String.format("Channel %s: subscribe in FAILED channel state", channel.name);
-            Log.v(TAG, errorString);
+            String errorString = String.format(Locale.ROOT, "Channel %s: subscribe in FAILED channel state", channel.name);
+            Log.e(TAG, errorString);
             ErrorInfo errorInfo = new ErrorInfo(errorString, 90001);
             throw AblyException.fromErrorInfo(errorInfo);
         }
@@ -223,124 +324,102 @@ public class Presence {
     }
 
     /* End sync and emit leave messages for residual members */
-    private void endSyncAndEmitLeaves() {
-        currentSyncChannelSerial = null;
+    private void endSync() {
         List<PresenceMessage> residualMembers = presence.endSync();
-        for (PresenceMessage member: residualMembers) {
-            /*
-             * RTP19: ... The PresenceMessage published should contain the original attributes of the presence
-             * member with the action set to LEAVE, PresenceMessage#id set to null, and the timestamp set
-             * to the current time ...
-             */
+        for (PresenceMessage member: residualMembers) {         // RTP19
             member.action = PresenceMessage.Action.leave;
             member.id = null;
             member.timestamp = System.currentTimeMillis();
         }
-        broadcastPresence(residualMembers.toArray(new PresenceMessage[residualMembers.size()]));
+        broadcastPresence(residualMembers);
+    }
 
-        /**
-         * (RTP5c2) If a SYNC is initiated as part of the attach, then once the SYNC is complete,
-         * all members not present in the PresenceMap but present in the internal PresenceMap must
-         * be re-entered automatically by the client using the clientId and data attributes from
-         * each. The members re-entered automatically must be removed from the internal PresenceMap
-         * ensuring that members present on the channel are constructed from presence events sent
-         * from Ably since the channel became ATTACHED
-         */
-        if (syncAsResultOfAttach) {
-            syncAsResultOfAttach = false;
-            for (PresenceMessage item: internalPresence.values()) {
-                if (presence.put(item)) {
-                    /* Message is new to presence map, send it */
-                    final String clientId = item.clientId;
-                    try {
-                        PresenceMessage itemToSend = (PresenceMessage)item.clone();
-                        itemToSend.action = PresenceMessage.Action.enter;
-                        updatePresence(itemToSend, new CompletionListener() {
-                            @Override
-                            public void onSuccess() {
-                            }
-
-                            @Override
-                            public void onError(ErrorInfo reason) {
-                                    /*
-                                     * (RTP5c3)  If any of the automatic ENTER presence messages published
-                                     * in RTP5c2 fail, then an UPDATE event should be emitted on the channel
-                                     * with resumed set to true and reason set to an ErrorInfo object with error
-                                     * code value 91004 and the error message string containing the message
-                                     * received from Ably (if applicable), the code received from Ably
-                                     * (if applicable) and the explicit or implicit client_id of the PresenceMessage
-                                     */
-                                String errorString = String.format("Cannot automatically re-enter %s on channel %s (%s)",
-                                        clientId, channel.name, reason.message);
-                                Log.e(TAG, errorString);
-                                channel.emitUpdate(new ErrorInfo(errorString, 91004), true);
-                            }
-                        });
-                    } catch(AblyException e) {
-                        String errorString = String.format("Cannot automatically re-enter %s on channel %s (%s)",
-                                clientId, channel.name, e.errorInfo.message);
-                        Log.e(TAG, errorString);
-                        channel.emitUpdate(new ErrorInfo(errorString, 91004), true);
-                    }
-                }
+    private void updateInnerPresenceMessageFields(ProtocolMessage message) {
+        for(int i = 0; i < message.presence.length; i++) {
+            PresenceMessage msg = message.presence[i];
+            try {
+                msg.decode(channel.options);
+            } catch (MessageDecodeException e) {
+                Log.e(TAG, String.format(Locale.ROOT, "%s on channel %s", e.errorInfo.message, channel.name));
             }
-            internalPresence.clear();
+            /* populate fields derived from protocol message */
+            if(msg.connectionId == null) msg.connectionId = message.connectionId;
+            if(msg.timestamp == 0) msg.timestamp = message.timestamp;
+            if(msg.id == null) msg.id = message.id + ':' + i;
         }
     }
 
-    void setPresence(PresenceMessage[] messages, boolean broadcast, String syncChannelSerial) {
-        Log.v(TAG, "setPresence(); channel = " + channel.name + "; broadcast = " + broadcast + "; syncChannelSerial = " + syncChannelSerial);
+    void onSync(ProtocolMessage protocolMessage) {
         String syncCursor = null;
-        if(syncChannelSerial != null) {
-            int colonPos = syncChannelSerial.indexOf(':');
-            String serial = colonPos >= 0 ? syncChannelSerial.substring(0, colonPos) : syncChannelSerial;
-            /* Discard incomplete sync if serial has changed */
-            if (presence.syncInProgress && currentSyncChannelSerial != null && !currentSyncChannelSerial.equals(serial))
-                endSyncAndEmitLeaves();
-            syncCursor = syncChannelSerial.substring(colonPos);
-            if(syncCursor.length() > 1) {
-                presence.startSync();
-                currentSyncChannelSerial = serial;
-            }
-        }
-        for(PresenceMessage update : messages) {
-            boolean updateInternalPresence = update.connectionId.equals(channel.ably.connection.id);
-            boolean broadcastThisUpdate = broadcast;
-            PresenceMessage originalUpdate = update;
+        String syncChannelSerial = protocolMessage.channelSerial;
+        // RTP18a
+        if(!StringUtils.isNullOrEmpty(syncChannelSerial)) {
+            String[] serials = syncChannelSerial.split(":");
+            String syncSequenceId = serials[0];
+            syncCursor = serials.length > 1 ? serials[1] : "";
 
-            switch(update.action) {
-            case enter:
-            case update:
-                update = (PresenceMessage)update.clone();
-                update.action = PresenceMessage.Action.present;
-            case present:
-                broadcastThisUpdate &= presence.put(update);
-                if(updateInternalPresence)
-                    internalPresence.put(update);
-                break;
-            case leave:
-                broadcastThisUpdate &= presence.remove(update);
-                if(updateInternalPresence)
-                    internalPresence.remove(update);
-                break;
-            case absent:
+            /* If a new sequence identifier is sent from Ably, then the client library
+             * must consider that to be the start of a new sync sequence
+             * and any previous in-flight sync should be discarded. (part of RTP18)*/
+            if (presence.syncInProgress && !StringUtils.isNullOrEmpty(currentSyncChannelSerial)
+                && !currentSyncChannelSerial.equals(syncSequenceId)) {
+                endSync();
             }
 
-            /*
-             * RTP2g: Any incoming presence message that passes the newness check should be emitted on the
-             * Presence object, with an event name set to its original action.
-             */
-            if (broadcastThisUpdate)
-                broadcastPresence(new PresenceMessage[]{originalUpdate});
+            presence.startSync();
+
+            if (!StringUtils.isNullOrEmpty(syncCursor))
+            {
+                currentSyncChannelSerial = syncSequenceId;
+            }
         }
 
-        /* if this is the last message in a sequence of sync updates, end the sync */
-        if(syncChannelSerial == null || syncCursor.length() <= 1) {
-            endSyncAndEmitLeaves();
+        onPresence(protocolMessage);
+
+        // RTP18b, RTP18c
+        if (StringUtils.isNullOrEmpty(syncChannelSerial) || StringUtils.isNullOrEmpty(syncCursor))
+        {
+            endSync();
+            currentSyncChannelSerial = null;
         }
     }
 
-    private void broadcastPresence(PresenceMessage[] messages) {
+    void onPresence(ProtocolMessage protocolMessage) {
+        updateInnerPresenceMessageFields(protocolMessage);
+        List<PresenceMessage> updatedPresenceMessages = new ArrayList<>();
+        for(PresenceMessage presenceMessage : protocolMessage.presence) {
+            boolean updateInternalPresence = presenceMessage.connectionId.equals(channel.ably.connection.id);
+            boolean memberUpdated = false;
+
+            switch(presenceMessage.action) {
+                case enter:
+                case update:
+                case present:
+                    PresenceMessage shallowPresenceCopy = (PresenceMessage)presenceMessage.clone();
+                    shallowPresenceCopy.action = PresenceMessage.Action.present;
+                    memberUpdated = presence.put(shallowPresenceCopy);
+                    if(updateInternalPresence)
+                        internalPresence.put(presenceMessage);
+                    break;
+                case leave:
+                    memberUpdated = presence.remove(presenceMessage);
+                    if(updateInternalPresence)
+                        internalPresence.remove(presenceMessage);
+                    break;
+                case absent:
+            }
+            if (memberUpdated) {
+                updatedPresenceMessages.add(presenceMessage);
+            }
+        }
+        /*
+         * RTP2g: Any incoming presence message that passes the newness check should be emitted on the
+         * Presence object, with an event name set to its original action.
+         */
+        broadcastPresence(updatedPresenceMessages);
+    }
+
+    private void broadcastPresence(List<PresenceMessage> messages) {
         for(PresenceMessage message : messages) {
             listeners.onPresenceMessage(message);
 
@@ -356,7 +435,7 @@ public class Presence {
     private static class Multicaster extends io.ably.lib.util.Multicaster<PresenceListener> implements PresenceListener {
         @Override
         public void onPresenceMessage(PresenceMessage message) {
-            for(PresenceListener member : members)
+            for (final PresenceListener member : getMembers())
                 try {
                     member.onPresenceMessage(message);
                 } catch(Throwable t) {}
@@ -388,11 +467,17 @@ public class Presence {
      ************************************/
 
     /**
-     * Enter this client into this channel. This client will be added to the presence set
-     * and presence subscribers will see an enter message for this client.
-     * @param data optional data (eg a status message) for this member.
-     * See {@link io.ably.types.Data} for the supported data types.
-     * @param listener a listener to be notified on completion of the operation.
+     * Enters the presence set for the channel, optionally passing a data payload.
+     * A clientId is required to be present on a channel.
+     * An optional callback may be provided to notify of the success or failure of the operation.
+     *
+     * <p>
+     * Spec: RTP8
+     *
+     * @param data The payload associated with the presence member.
+     * @param listener An callback to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      * @throws AblyException
      */
     public void enter(Object data, CompletionListener listener) throws AblyException {
@@ -401,12 +486,17 @@ public class Presence {
     }
 
     /**
-     * Update the presence data for this client. If the client is not already a member of
-     * the presence set it will be added, and presence subscribers will see an enter or
-     * update message for this client.
-     * @param data optional data (eg a status message) for this member.
-     * See {@link io.ably.types.Data} for the supported data types.
-     * @param listener a listener to be notified on completion of the operation.
+     * Updates the data payload for a presence member.
+     * If called before entering the presence set, this is treated as an {@link PresenceMessage.Action#enter} event.
+     * An optional callback may be provided to notify of the success or failure of the operation.
+     *
+     * <p>
+     * Spec: RTP9
+     *
+     * @param data The payload associated with the presence member.
+     * @param listener An callback to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      * @throws AblyException
      */
     public void update(Object data, CompletionListener listener) throws AblyException {
@@ -415,11 +505,16 @@ public class Presence {
     }
 
     /**
-     * Leave this client from this channel. This client will be removed from the presence
-     * set and presence subscribers will see a leave message for this client.
-     * @param data optional data (eg a status message) for this member.
-     * See {@link io.ably.types.Data} for the supported data types.
-     * @param listener a listener to be notified on completion of the operation.
+     * Leaves the presence set for the channel.
+     * A client must have previously entered the presence set before they can leave it.
+     *
+     * <p>
+     * Spec: RTP10
+     *
+     * @param data The payload associated with the presence member.
+     * @param listener a listener to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      * @throws AblyException
      */
     public void leave(Object data, CompletionListener listener) throws AblyException {
@@ -428,9 +523,15 @@ public class Presence {
     }
 
     /**
-     * Leave this client from this channel. This client will be removed from the presence
-     * set and presence subscribers will see a leave message for this client.
-     * @param listener a listener to be notified on completion of the operation.
+     * Leaves the presence set for the channel.
+     * A client must have previously entered the presence set before they can leave it.
+     *
+     * <p>
+     * Spec: RTP10
+     *
+     * @param listener a listener to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      * @throws AblyException
      */
     public void leave(CompletionListener listener) throws AblyException {
@@ -438,49 +539,51 @@ public class Presence {
     }
 
     /**
-     * Enter a specified client into this channel. The given clientId will be added to
-     * the presence set and presence subscribers will see a corresponding presence message
-     * with an empty data payload.
-     * This method is provided to support connections (eg connections from application
-     * server instances) that act on behalf of multiple clientIds. In order to be able to
-     * enter the channel with this method, the client library must have been instanced
-     * either with a key, or with a token bound to the wildcard clientId.
-     * @param clientId the id of the client.
+     * Enters the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP4, RTP14, RTP15
+     *
+     * @param clientId The ID of the client to enter into the presence set.
      */
     public void enterClient(String clientId) throws AblyException {
         enterClient(clientId, null);
     }
 
     /**
-     * Enter a specified client into this channel. The given client will be added to the
-     * presence set and presence subscribers will see a corresponding presence message.
-     * This method is provided to support connections (eg connections from application
-     * server instances) that act on behalf of multiple clientIds. In order to be able to
-     * enter the channel with this method, the client library must have been instanced
-     * either with a key, or with a token bound to the wildcard clientId.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @throws AblyException
+     * Enters the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP4, RTP14, RTP15
+     *
+     * @param clientId The ID of the client to enter into the presence set.
+     * @param data The payload associated with the presence member.
      */
     public void enterClient(String clientId, Object data) throws AblyException {
         enterClient(clientId, data, null);
     }
 
     /**
-     * Enter a specified client into this channel. The given client will be added to the
-     * presence set and presence subscribers will see a corresponding presence message.
-     * This method is provided to support connections (eg connections from application
-     * server instances) that act on behalf of multiple clientIds. In order to be able to
-     * enter the channel with this method, the client library must have been instanced
-     * either with a key, or with a token bound to the wildcard clientId.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @param listener a listener to be notified on completion of the operation.
-     * @throws AblyException
+     * Enters the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP4, RTP14, RTP15
+     *
+     * @param clientId The ID of the client to enter into the presence set.
+     * @param data The payload associated with the presence member.
+     * @param listener An callback to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      */
     public void enterClient(String clientId, Object data, CompletionListener listener) throws AblyException {
         if(clientId == null) {
-            String errorMessage = String.format("Channel %s: unable to enter presence channel (null clientId specified)", channel.name);
+            String errorMessage = String.format(Locale.ROOT, "Channel %s: unable to enter presence channel (null clientId specified)", channel.name);
             Log.v(TAG, errorMessage);
             if(listener != null) {
                 listener.onError(new ErrorInfo(errorMessage, 40000));
@@ -491,47 +594,70 @@ public class Presence {
         updatePresence(new PresenceMessage(PresenceMessage.Action.enter, clientId, data), listener);
     }
 
+    private void enterClientWithId(String id, String clientId, Object data, CompletionListener listener) throws AblyException {
+        if(clientId == null) {
+            String errorMessage = String.format(Locale.ROOT, "Channel %s: unable to enter presence channel (null clientId specified)", channel.name);
+            Log.v(TAG, errorMessage);
+            if(listener != null) {
+                listener.onError(new ErrorInfo(errorMessage, 40000));
+                return;
+            }
+        }
+        PresenceMessage presenceMsg = new PresenceMessage(PresenceMessage.Action.enter, clientId, data);
+        presenceMsg.id = id;
+        Log.v(TAG, "enterClient(); channel = " + channel.name + "; clientId = " + clientId);
+        updatePresence(presenceMsg, listener);
+    }
+
     /**
-     * Update the presence data for a specified client into this channel.
-     * If the client is not already a member of the presence set it will be added,
-     * and presence subscribers will see a corresponding presence message
-     * with an empty data payload. As for #enterClient above, the connection
-     * must be authenticated in a way that enables it to represent an arbitrary clientId.
-     * @param clientId the id of the client.
-     * @throws AblyException
+     * Updates the data payload for a presence member using a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     * An optional callback may be provided to notify of the success or failure of the operation.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to update in the presence set.
      */
     public void updateClient(String clientId) throws AblyException {
         updateClient(clientId, null);
     }
 
     /**
-     * Update the presence data for a specified client into this channel.
-     * If the client is not already a member of the presence set it will be added, and
-     * presence subscribers will see an enter or update message for this client.
-     * As for #enterClient above, the connection must be authenticated in a way that
-     * enables it to represent an arbitrary clientId.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @throws AblyException
+     * Updates the data payload for a presence member using a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     * An optional callback may be provided to notify of the success or failure of the operation.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to update in the presence set.
+     * @param data The payload to update for the presence member.
      */
     public void updateClient(String clientId, Object data) throws AblyException {
         updateClient(clientId, data, null);
     }
 
     /**
-     * Update the presence data for a specified client into this channel.
-     * If the client is not already a member of the presence set it will be added, and
-     * presence subscribers will see an enter or update message for this client.
-     * As for #enterClient above, the connection must be authenticated in a way that
-     * enables it to represent an arbitrary clientId.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @param listener a listener to be notified on completion of the operation.
-     * @throws AblyException
+     * Updates the data payload for a presence member using a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     * An optional callback may be provided to notify of the success or failure of the operation.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to update in the presence set.
+     * @param data The payload to update for the presence member.
+     * @param listener An callback to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      */
     public void updateClient(String clientId, Object data, CompletionListener listener) throws AblyException {
         if(clientId == null) {
-            String errorMessage = String.format("Channel %s: unable to update presence channel (null clientId specified)", channel.name);
+            String errorMessage = String.format(Locale.ROOT, "Channel %s: unable to update presence channel (null clientId specified)", channel.name);
             Log.v(TAG, errorMessage);
             if(listener != null) {
                 listener.onError(new ErrorInfo(errorMessage, 40000));
@@ -543,38 +669,51 @@ public class Presence {
     }
 
     /**
-     * Leave a given client from this channel. This client will be removed from the
-     * presence set and presence subscribers will see a corresponding presence message
-     * with an empty data payload.
-     * @param clientId the id of the client.
-     * @throws AblyException
+     * Leaves the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to leave the presence set for.
      */
     public void leaveClient(String clientId) throws AblyException {
         leaveClient(clientId, null);
     }
 
     /**
-     * Leave a given client from this channel. This client will be removed from the
-     * presence set and presence subscribers will see a leave message for this client.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @throws AblyException
+     * Leaves the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to leave the presence set for.
+     * @param data The payload associated with the presence member.
      */
     public void leaveClient(String clientId, Object data) throws AblyException {
         leaveClient(clientId, data, null);
     }
 
     /**
-     * Leave a given client from this channel. This client will be removed from the
-     * presence set and presence subscribers will see a leave message for this client.
-     * @param clientId the id of the client.
-     * @param data optional data (eg a status message) for this member.
-     * @param listener a listener to be notified on completion of the operation.
-     * @throws AblyException
+     * Leaves the presence set of the channel for a given clientId.
+     * Enables a single client to update presence on behalf of any number of clients using a single connection.
+     * The library must have been instantiated with an API key or a token bound to a wildcard clientId.
+     *
+     * <p>
+     * Spec: RTP15
+     *
+     * @param clientId The ID of the client to leave the presence set for.
+     * @param data The payload associated with the presence member.
+     * @param listener An callback to notify of the success or failure of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      */
     public void leaveClient(String clientId, Object data, CompletionListener listener) throws AblyException {
         if(clientId == null) {
-            String errorMessage = String.format("Channel %s: unable to leave presence channel (null clientId specified)", channel.name);
+            String errorMessage = String.format(Locale.ROOT, "Channel %s: unable to leave presence channel (null clientId specified)", channel.name);
             Log.v(TAG, errorMessage);
             if(listener != null) {
                 listener.onError(new ErrorInfo(errorMessage, 40000));
@@ -589,18 +728,20 @@ public class Presence {
      * Update the presence for this channel with a given PresenceMessage update.
      * The connection must be authenticated in a way that enables it to represent
      * the clientId in the message.
+     *
      * @param msg the presence message
      * @param listener a listener to be notified on completion of the operation.
+     * <p>
+     * This listener is invoked on a background thread.
      * @throws AblyException
      */
     public void updatePresence(PresenceMessage msg, CompletionListener listener) throws AblyException {
-        Log.v(TAG, "update(); channel = " + channel.name);
+        Log.v(TAG, "updatePresence(); channel = " + channel.name);
 
         AblyRealtime ably = channel.ably;
         boolean connected = (ably.connection.state == ConnectionState.connected);
-        String clientId;
         try {
-            clientId = ably.auth.checkClientId(msg, false, connected);
+            ably.auth.checkClientId(msg, false, connected);
         } catch(AblyException e) {
             if(listener != null) {
                 listener.onError(e.errorInfo);
@@ -614,8 +755,7 @@ public class Presence {
             case initialized:
                 channel.attach();
             case attaching:
-                QueuedPresence queued = new QueuedPresence(msg, listener);
-                pendingPresence.put(clientId, queued);
+                pendingPresence.add(new QueuedPresence(msg, listener));
                 break;
             case attached:
                 ProtocolMessage message = new ProtocolMessage(ProtocolMessage.Action.presence, channel.name);
@@ -634,23 +774,66 @@ public class Presence {
      ************************************/
 
     /**
-     * Obtain recent history for this channel using the REST API.
-     * The history provided relates to all clients of this application,
-     * not just this instance.
-     * @param params the request params. See the Ably REST API
-     * documentation for more details.
-     * @return an array of Messgaes for this Channel.
+     * Retrieves a {@link PaginatedResult} object, containing an array of historical {@link PresenceMessage} objects for the channel.
+     * If the channel is configured to persist messages,
+     * then presence messages can be retrieved from history for up to 72 hours in the past.
+     * If not, presence messages can only be retrieved from history for up to two minutes in the past.
+     * <p>
+     * Spec: RTP12c
+     * @param params the request params:
+     * <p>
+     * start (RTP12a) - The time from which messages are retrieved, specified as milliseconds since the Unix epoch.
+     * <p>
+     * end (RTP12a) - The time until messages are retrieved, specified as milliseconds since the Unix epoch.
+     * <p>
+     * direction (RTP12a) - The order for which messages are returned in.
+     *               Valid values are backwards which orders messages from most recent to oldest,
+     *               or forwards which orders messages from oldest to most recent.
+     *               The default is backwards.
+     * limit (RTP12a) - An upper limit on the number of messages returned. The default is 100, and the maximum is 1000.
+     * @return A {@link PaginatedResult} object containing an array of {@link PresenceMessage} objects.
      * @throws AblyException
      */
     public PaginatedResult<PresenceMessage> history(Param[] params) throws AblyException {
-        return historyImpl(params).sync();
+        return history(channel.ably.http, params);
     }
 
+    PaginatedResult<PresenceMessage> history(Http http, Param[] params) throws AblyException {
+        return historyImpl(http, params).sync();
+    }
+
+    /**
+     * Asynchronously retrieves a {@link PaginatedResult} object, containing an array of historical {@link PresenceMessage} objects for the channel.
+     * If the channel is configured to persist messages,
+     * then presence messages can be retrieved from history for up to 72 hours in the past.
+     * If not, presence messages can only be retrieved from history for up to two minutes in the past.
+     * <p>
+     * Spec: RTP12c
+     * @param params the request params:
+     * <p>
+     * start (RTP12a) - The time from which messages are retrieved, specified as milliseconds since the Unix epoch.
+     * <p>
+     * end (RTP12a) - The time until messages are retrieved, specified as milliseconds since the Unix epoch.
+     * <p>
+     * direction (RTP12a) - The order for which messages are returned in.
+     *               Valid values are backwards which orders messages from most recent to oldest,
+     *               or forwards which orders messages from oldest to most recent.
+     *               The default is backwards.
+     * limit (RTP12a) - An upper limit on the number of messages returned. The default is 100, and the maximum is 1000.
+     * @param callback  A Callback returning {@link AsyncPaginatedResult} object containing an array of {@link PresenceMessage} objects.
+     * <p>
+     * This callback is invoked on a background thread.
+     * @throws AblyException
+     */
     public void historyAsync(Param[] params, Callback<AsyncPaginatedResult<PresenceMessage>> callback) {
-        historyImpl(params).async(callback);
+        historyImpl(channel.ably.http, params).async(callback);
     }
 
-    private BasePaginatedQuery.ResultRequest<PresenceMessage> historyImpl(Param[] params) {
+    void historyAsync(Http http, Param[] params, Callback<AsyncPaginatedResult<PresenceMessage>> callback) {
+        historyImpl(http, params).async(callback);
+    }
+
+    private BasePaginatedQuery.ResultRequest<PresenceMessage> historyImpl(Http http, Param[] params) {
         try {
             params = Channel.replacePlaceholderParams(channel, params);
         } catch (AblyException e) {
@@ -659,7 +842,7 @@ public class Presence {
 
         AblyRealtime ably = channel.ably;
         HttpCore.BodyHandler<PresenceMessage> bodyHandler = PresenceSerializer.getPresenceResponseHandler(channel.options);
-        return new BasePaginatedQuery<PresenceMessage>(ably.http, channel.basePath + "/presence/history", HttpUtils.defaultAcceptHeaders(ably.options.useBinaryProtocol), params, bodyHandler).get();
+        return new BasePaginatedQuery<PresenceMessage>(http, channel.basePath + "/presence/history", HttpUtils.defaultAcceptHeaders(ably.options.useBinaryProtocol), params, bodyHandler).get();
     }
 
     /**
@@ -672,7 +855,7 @@ public class Presence {
         QueuedPresence(PresenceMessage msg, CompletionListener listener) { this.msg = msg; this.listener = listener; }
     }
 
-    private final Map<String, QueuedPresence> pendingPresence = new HashMap<String, QueuedPresence>();
+    private final List<QueuedPresence> pendingPresence = new ArrayList<QueuedPresence>();
 
     private void sendQueuedMessages() {
         Log.v(TAG, "sendQueuedMessages()");
@@ -684,7 +867,7 @@ public class Presence {
             return;
 
         ProtocolMessage message = new ProtocolMessage(ProtocolMessage.Action.presence, channel.name);
-        Iterator<QueuedPresence> allQueued = pendingPresence.values().iterator();
+        Iterator<QueuedPresence> allQueued = pendingPresence.iterator();
         PresenceMessage[] presenceMessages = message.presence = new PresenceMessage[count];
         CompletionListener listener;
 
@@ -703,7 +886,9 @@ public class Presence {
             }
             listener = mListener.isEmpty() ? null : mListener;
         }
+
         pendingPresence.clear();
+
         try {
             connectionManager.send(message, queueMessages, listener);
         } catch(AblyException e) {
@@ -715,7 +900,7 @@ public class Presence {
 
     private void failQueuedMessages(ErrorInfo reason) {
         Log.v(TAG, "failQueuedMessages()");
-        for(QueuedPresence msg : pendingPresence.values())
+        for(QueuedPresence msg : pendingPresence)
             if(msg.listener != null)
                 try {
                     msg.listener.onError(reason);
@@ -730,46 +915,62 @@ public class Presence {
      * attach / detach
      ************************************/
 
-    void setAttached(boolean hasPresence) {
-        /* Start sync, if hasPresence is not set end sync immediately dropping all the current presence members */
+    void onAttached(boolean hasPresence) {
         presence.startSync();
-        syncAsResultOfAttach = true;
-        if (!hasPresence) {
-            /*
-             * RTP19a  If the PresenceMap has existing members when an ATTACHED message is received without a
-             * HAS_PRESENCE flag, the client library should emit a LEAVE event for each existing member ...
-             */
-            endSyncAndEmitLeaves();
+        if (!hasPresence) { // RTP19a
+            endSync();
         }
-        sendQueuedMessages();
+        sendQueuedMessages(); // RTP5b
+        enterInternalMembers(); // RTP17f
     }
 
-    void setDetached(ErrorInfo reason) {
+    /**
+     * Spec: RTP17g
+     */
+    void enterInternalMembers() {
+        for (final PresenceMessage item: internalPresence.members.values()) {
+            try {
+                enterClientWithId(item.id, item.clientId, item.data, new CompletionListener() {
+                    @Override
+                    public void onSuccess() {
+                    }
+
+                    @Override
+                    public void onError(ErrorInfo reason) {
+                        String errorString = String.format(Locale.ROOT, "Cannot automatically re-enter %s on channel %s (%s)",
+                            item.clientId, channel.name, reason.message);
+                        Log.e(TAG, errorString);
+                        channel.emitUpdate(new ErrorInfo(errorString, 91004), true);
+                    }
+                });
+            } catch(AblyException e) {
+                String errorString = String.format(Locale.ROOT, "Cannot automatically re-enter %s on channel %s (%s)",
+                    item.clientId, channel.name, e.errorInfo.message);
+                Log.e(TAG, errorString);
+                channel.emitUpdate(new ErrorInfo(errorString, 91004), true);
+            }
+        }
+    }
+
+    // RTP5a
+    void onChannelDetachedOrFailed(ErrorInfo reason) {
         /* Interrupt get() call if needed */
         synchronized (presence) {
             presence.notifyAll();
         }
 
-        /**
-         * (RTP5a) If the channel enters the DETACHED or FAILED state then all queued presence
-         * messages will fail immediately, and the PresenceMap and internal PresenceMap is cleared.
-         * The latter ensures members are not automatically re-entered if the Channel later becomes attached
-         */
-        failQueuedMessages(reason);
         presence.clear();
         internalPresence.clear();
+        failQueuedMessages(reason);
     }
 
-    void setSuspended(ErrorInfo reason) {
+    // RTP5f, RTP16b
+    void onChannelSuspended(ErrorInfo reason) {
         /* Interrupt get() call if needed */
         synchronized (presence) {
             presence.notifyAll();
         }
 
-        /*
-         * (RTP5f) If the channel enters the SUSPENDED state then all queued presence messages will fail
-         * immediately, and the PresenceMap is maintained
-         */
         failQueuedMessages(reason);
     }
 
@@ -792,11 +993,18 @@ public class Presence {
          * state other than attached or attaching
          */
         synchronized void waitForSync() throws AblyException, InterruptedException {
-            boolean syncIsComplete = false; /* temporary variable to avoid potential race conditions */
-            while((channel.state == ChannelState.attached || channel.state == ChannelState.attaching) &&
-                    /* = (and not ==) is intentional */
-                    !(syncIsComplete = (!syncInProgress && syncComplete)))
+            boolean syncIsComplete = false;    /* temporary variable to avoid potential race conditions */
+            while (channel.state == ChannelState.attaching) {
                 wait();
+            }
+            if (channel.state == ChannelState.attached) {
+                do {
+                    syncIsComplete = !syncInProgress && syncComplete;
+                    if (!syncIsComplete) {
+                        wait();
+                    }
+                } while (!syncIsComplete);
+            }
 
             /* invalid channel state */
             int errorCode;
@@ -807,12 +1015,12 @@ public class Presence {
                  * or if waitForSync is set to true, result in an error with code 91005 and a message stating
                  * that the presence state is out of sync due to the channel being in a SUSPENDED state */
                 errorCode = 91005;
-                errorMessage = String.format("Channel %s: presence state is out of sync due to the channel being in a SUSPENDED state", channel.name);
+                errorMessage = String.format(Locale.ROOT, "Channel %s: presence state is out of sync due to the channel being in a SUSPENDED state", channel.name);
             } else if(syncIsComplete) {
                 return;
             } else {
                 errorCode = 90001;
-                errorMessage = String.format("Channel %s: cannot get presence state because channel is in invalid state", channel.name);
+                errorMessage = String.format(Locale.ROOT, "Channel %s: cannot get presence state because channel is in invalid state", channel.name);
             }
             Log.v(TAG, errorMessage);
             throw AblyException.fromErrorInfo(new ErrorInfo(errorMessage, errorCode));
@@ -826,7 +1034,7 @@ public class Presence {
             for (Param param: params) {
                 switch (param.key) {
                     case GET_WAITFORSYNC:
-                        waitForSync = Boolean.valueOf(param.value);
+                        waitForSync = Boolean.parseBoolean(param.value);
                         break;
                     case GET_CLIENTID:
                         clientId = param.value;
@@ -841,8 +1049,7 @@ public class Presence {
             if (waitForSync)
                 waitForSync();
 
-            for (Map.Entry<String, PresenceMessage> entry: members.entrySet()) {
-                PresenceMessage member = entry.getValue();
+            for (PresenceMessage member: members.values()) {
                 if ((clientId == null || member.clientId.equals(clientId)) &&
                         (connectionId == null || member.connectionId.equals(connectionId)))
                     result.add(member);
@@ -858,7 +1065,7 @@ public class Presence {
          * false if the message is already superseded
          */
         synchronized boolean put(PresenceMessage item) {
-            String key = item.memberKey();
+            String key = memberKey(item);
             /* we've seen this member, so do not remove it at the end of sync */
             if(residualMembers != null)
                 residualMembers.remove(key);
@@ -906,10 +1113,10 @@ public class Presence {
                 return false;
 
             try {
-                long messageSerial = Long.valueOf(itemComponents[1]);
-                long messageIndex = Long.valueOf(itemComponents[2]);
-                long existingMessageSerial = Long.valueOf(existingItemComponents[1]);
-                long existingMessageIndex = Long.valueOf(existingItemComponents[2]);
+                long messageSerial = Long.parseLong(itemComponents[1]);
+                long messageIndex = Long.parseLong(itemComponents[2]);
+                long existingMessageSerial = Long.parseLong(existingItemComponents[1]);
+                long existingMessageIndex = Long.parseLong(existingItemComponents[2]);
 
                 return existingMessageSerial > messageSerial ||
                         (existingMessageSerial == messageSerial && existingMessageIndex >= messageIndex);
@@ -920,40 +1127,12 @@ public class Presence {
         }
 
         /**
-         * Get all members based on the current state (even if sync is in progress)
-         * @return
-         */
-        synchronized Collection<PresenceMessage> values() {
-            try { return values(false); } catch (InterruptedException|AblyException e) { return null; }
-        }
-
-        /**
-         * Get all members, optionally waiting if a sync is in progress.
-         * @param wait
-         * @return
-         * @throws InterruptedException
-         */
-        synchronized Collection<PresenceMessage> values(boolean wait) throws AblyException, InterruptedException {
-            Set<PresenceMessage> result = new HashSet<PresenceMessage>();
-            if(wait)
-                waitForSync();
-            result.addAll(members.values());
-            for(Iterator<PresenceMessage> it = result.iterator(); it.hasNext();) {
-                PresenceMessage entry = it.next();
-                if(entry.action == PresenceMessage.Action.absent) {
-                    it.remove();
-                }
-            }
-            return result;
-        }
-
-        /**
          * Remove a member.
          * @param item
          * @return
          */
         synchronized boolean remove(PresenceMessage item) {
-            String key = item.memberKey();
+            String key = memberKey(item);
             if (hasNewerItem(key, item))
                 return false;
             PresenceMessage existingItem = members.remove(key);
@@ -994,9 +1173,13 @@ public class Presence {
                 /* any members that were present at the start of the sync,
                  * and have not been seen in sync, can be removed */
                 for(String itemKey: residualMembers) {
-                    /* clone presence message as it still can be in the internal presence map */
-                    removedEntries.add((PresenceMessage)members.get(itemKey).clone());
-                    members.remove(itemKey);
+                    PresenceMessage removedMember = members.remove(itemKey);
+                    /* This null check is added as a potential fix for an issue that
+                     * could not be reproduced, reported here https://github.com/ably/ably-java/issues/853 */
+                    if(removedMember != null) {
+                        /* clone presence message as it still can be in the internal presence map */
+                        removedEntries.add((PresenceMessage) removedMember.clone());
+                    }
                 }
                 residualMembers = null;
 
@@ -1017,13 +1200,36 @@ public class Presence {
                 residualMembers.clear();
         }
 
+        /**
+         * Combines clientId and connectionId to ensure that multiple connected clients with an identical clientId are uniquely identifiable.
+         * A string function that returns the combined clientId and connectionId.
+         * <p>
+         * Spec: TP3h
+         * @return A combination of clientId and connectionId.
+         */
+        public String memberKey(PresenceMessage item) {
+            return item.memberKey();
+        }
+
         private boolean syncInProgress;
         private Collection<String> residualMembers;
         private final HashMap<String, PresenceMessage> members = new HashMap<String, PresenceMessage>();
     }
 
+    private class InternalPresenceMap extends PresenceMap {
+        /**
+         * Get the member key for the internal PresenceMessage.
+         * Spec: RTP17h
+         * @return key of the presence message
+         */
+        @Override
+        public String memberKey(PresenceMessage item) {
+            return item.clientId;
+        }
+    }
+
     private final PresenceMap presence = new PresenceMap();
-    private final PresenceMap internalPresence = new PresenceMap();
+    private final PresenceMap internalPresence = new InternalPresenceMap(); // RTP17
 
     /************************************
      * general
@@ -1039,12 +1245,11 @@ public class Presence {
 
     /* channel serial if sync is in progress */
     private String currentSyncChannelSerial;
-    /* Sync in progress is a result of attach operation */
-    private boolean syncAsResultOfAttach;
-
     /**
-     * (RTP13) Presence#syncComplete returns true if the initial SYNC operation has completed for
-     * the members present on the channel
+     * Indicates whether the presence set synchronization between Ably and the clients on the channel has been completed.
+     * Set to true when the sync is complete.
+     * <p>
+     * Spec: RTP13
      */
     public boolean syncComplete;
 }

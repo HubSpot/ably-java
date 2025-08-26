@@ -4,6 +4,11 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
 
+import com.google.gson.annotations.JsonAdapter;
+import io.ably.lib.objects.ObjectsSerializer;
+import io.ably.lib.objects.ObjectsHelper;
+import io.ably.lib.objects.ObjectsJsonSerializer;
+import org.jetbrains.annotations.Nullable;
 import org.msgpack.core.MessageFormat;
 import org.msgpack.core.MessagePacker;
 import org.msgpack.core.MessageUnpacker;
@@ -28,24 +33,28 @@ import io.ably.lib.util.Log;
  */
 public class ProtocolMessage {
     public enum Action {
-        heartbeat,
-        ack,
-        nack,
-        connect,
-        connected,
-        disconnect,
-        disconnected,
-        close,
-        closed,
-        error,
-        attach,
-        attached,
-        detach,
-        detached,
-        presence,
-        message,
-        sync,
-        auth;
+        heartbeat, // 0
+        ack, // 1
+        nack, // 2
+        connect, // 3
+        connected, // 4
+        disconnect, // 5
+        disconnected, // 6
+        close, // 7
+        closed, // 8
+        error, // 9
+        attach, // 10
+        attached, // 11
+        detach, // 12
+        detached, // 13
+        presence, // 14
+        message, // 15
+        sync, // 16
+        auth, // 17
+        activate, // 18
+        object, // 19
+        object_sync, // 20
+        annotation; // 21
 
         public int getValue() { return ordinal(); }
         public static Action findByValue(int value) { return values()[value]; }
@@ -57,12 +66,21 @@ public class ProtocolMessage {
         has_backlog(1),
         resumed(2),
         attach_resume(5),
-
+        /* Has object flag */
+        has_objects(7),
         /* Channel mode flags */
         presence(16),
         publish(17),
         subscribe(18),
-        presence_subscribe(19);
+        presence_subscribe(19),
+        // 20 reserved (TR3v)
+        /* Annotation flags */
+        annotation_publish(21), // (TR3w)
+        annotation_subscribe(22), // (TR3x)
+        // 23 reserved (TR3v)
+        /* Object flags */
+        object_subscribe(24), // (TR3y)
+        object_publish(25); // (TR3z)
 
         private final int mask;
 
@@ -75,8 +93,12 @@ public class ProtocolMessage {
         }
     }
 
+    /**
+     * (RTN7a)
+     */
     public static boolean ackRequired(ProtocolMessage msg) {
-        return (msg.action == Action.message || msg.action == Action.presence);
+        return (msg.action == Action.message || msg.action == Action.presence
+            || msg.action == Action.object || msg.action == Action.annotation);
     }
 
     public ProtocolMessage() {}
@@ -98,7 +120,6 @@ public class ProtocolMessage {
     public String channel;
     public String channelSerial;
     public String connectionId;
-    public Long connectionSerial;
     public Long msgSerial;
     public long timestamp;
     public Message[] messages;
@@ -106,6 +127,15 @@ public class ProtocolMessage {
     public ConnectionDetails connectionDetails;
     public AuthDetails auth;
     public Map<String, String> params;
+    public Annotation[] annotations;
+    /**
+     * This will be null if we skipped decoding this property due to user not requesting Objects functionality
+     * JsonAdapter annotation supports java version (1.8) mentioned in build.gradle
+     * This is targeted and specific to the state field, so won't affect other fields
+     */
+    @Nullable
+    @JsonAdapter(ObjectsJsonSerializer.class)
+    public Object[] state;
 
     public boolean hasFlag(final Flag flag) {
         return (flags & flag.getMask()) == flag.getMask();
@@ -129,6 +159,8 @@ public class ProtocolMessage {
         if(flags != 0) ++fieldCount;
         if(params != null) ++fieldCount;
         if(channelSerial != null) ++fieldCount;
+        if(annotations != null) ++fieldCount;
+        if(state != null && ObjectsHelper.getSerializer() != null) ++fieldCount;
         packer.packMapHeader(fieldCount);
         packer.packString("action");
         packer.packInt(action.getValue());
@@ -164,6 +196,19 @@ public class ProtocolMessage {
             packer.packString("channelSerial");
             packer.packString(channelSerial);
         }
+        if(annotations != null) {
+            packer.packString("annotations");
+            AnnotationSerializer.writeMsgpackArray(annotations, packer);
+        }
+        if(state != null) {
+            ObjectsSerializer objectsSerializer = ObjectsHelper.getSerializer();
+            if (objectsSerializer != null) {
+                packer.packString("state");
+                objectsSerializer.writeMsgpackArray(state, packer);
+            } else {
+                Log.w(TAG, "Skipping 'state' field msgpack serialization because ObjectsSerializer not found");
+            }
+        }
     }
 
     ProtocolMessage readMsgpack(MessageUnpacker unpacker) throws IOException {
@@ -198,9 +243,6 @@ public class ProtocolMessage {
                 case "connectionId":
                     connectionId = unpacker.unpackString();
                     break;
-                case "connectionSerial":
-                    connectionSerial = Long.valueOf(unpacker.unpackLong());
-                    break;
                 case "msgSerial":
                     msgSerial = Long.valueOf(unpacker.unpackLong());
                     break;
@@ -225,6 +267,18 @@ public class ProtocolMessage {
                     break;
                 case "params":
                     params = MessageSerializer.readStringMap(unpacker);
+                    break;
+                case "annotations":
+                    annotations = AnnotationSerializer.readMsgpackArray(unpacker);
+                    break;
+                case "state":
+                    ObjectsSerializer objectsSerializer = ObjectsHelper.getSerializer();
+                    if (objectsSerializer != null) {
+                        state = objectsSerializer.readMsgpackArray(unpacker);
+                    } else {
+                        Log.w(TAG, "Skipping 'state' field msgpack deserialization because ObjectsSerializer not found");
+                        unpacker.skipValue();
+                    }
                     break;
                 default:
                     Log.v(TAG, "Unexpected field: " + fieldName);
@@ -251,10 +305,26 @@ public class ProtocolMessage {
         }
     }
 
+    /**
+     * Contains the token string used to authenticate a client with Ably.
+     */
     public static class AuthDetails {
+        /**
+         * The authentication token string.
+         * <p>
+         * Spec: AD2
+         */
         public String accessToken;
 
+        /**
+         * Default constructor
+         */
         private AuthDetails() { }
+
+        /**
+         * Creates AuthDetails object with provided authentication token string.
+         * @param s Authentication token string.
+         */
         public AuthDetails(String s) { accessToken = s; }
 
         AuthDetails readMsgpack(MessageUnpacker unpacker) throws IOException {

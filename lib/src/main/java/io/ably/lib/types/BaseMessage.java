@@ -8,7 +8,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonPrimitive;
 import io.ably.lib.util.Base64Coder;
-import io.ably.lib.util.Crypto.ChannelCipher;
+import io.ably.lib.util.Crypto;
+import io.ably.lib.util.Crypto.EncryptingChannelCipher;
+import io.ably.lib.util.Crypto.DecryptingChannelCipher;
 import io.ably.lib.util.Log;
 import io.ably.lib.util.Serialisation;
 import org.msgpack.core.MessageFormat;
@@ -23,32 +25,46 @@ import java.util.regex.Pattern;
 
 public class BaseMessage implements Cloneable {
     /**
-     * A unique id for this message
+     * A Unique ID assigned by Ably to this message.
+     * <p>
+     * Spec: TM2a
      */
     public String id;
 
     /**
-     * The timestamp for this message
+     * Timestamp of when the message was received by Ably, as milliseconds since the Unix epoch.
+     * <p>
+     * Spec: TM2f
      */
     public long timestamp;
 
     /**
-     * The id of the publisher of this message
+     * The client ID of the publisher of this message.
+     * <p>
+     * Spec: RSL1g1, TM2b
      */
     public String clientId;
 
     /**
-     * The connection id of the publisher of this message
+     * The connection ID of the publisher of this message.
+     * <p>
+     * Spec: TM2c
      */
     public String connectionId;
 
     /**
-     * Any transformation applied to the data for this message
+     * This is typically empty, as all messages received from Ably are automatically decoded client-side using this value.
+     * However, if the message encoding cannot be processed, this attribute contains the remaining transformations
+     * not applied to the data payload.
+     * <p>
+     * Spec: TM2e
      */
     public String encoding;
 
     /**
-     * The message payload.
+     * The message payload, if provided.
+     * <p>
+     * Spec: TM2d
      */
     public Object data;
 
@@ -131,7 +147,8 @@ public class BaseMessage implements Cloneable {
                         case "cipher":
                             if(opts != null && opts.encrypted) {
                                 try {
-                                    data = opts.getCipher().decrypt((byte[]) data);
+                                    DecryptingChannelCipher cipher = Crypto.createChannelDecipher(opts.getCipherParamsOrDefault());
+                                    data = cipher.decrypt((byte[]) data);
                                 } catch(AblyException e) {
                                     throw MessageDecodeException.fromDescription(e.errorInfo.message);
                                 }
@@ -179,7 +196,7 @@ public class BaseMessage implements Cloneable {
             }
         }
         if (opts != null && opts.encrypted) {
-            ChannelCipher cipher = opts.getCipher();
+            EncryptingChannelCipher cipher = Crypto.createChannelEncipher(opts.getCipherParamsOrDefault());
             data = cipher.encrypt((byte[]) data);
             encoding = ((encoding == null) ? "" : encoding + "/") + "cipher+" + cipher.getAlgorithm();
         }
@@ -259,6 +276,20 @@ public class BaseMessage implements Cloneable {
             return null;
         }
         return element.getAsLong();
+    }
+
+    /**
+     * Read an optional numerical value.
+     * @return The value, or null if the key was not present in the map.
+     * @throws ClassCastException if an element exists for that key and that element is not a {@link JsonPrimitive}
+     * or is not a valid int value.
+     */
+    protected Integer readInt(final JsonObject map, final String key) {
+        final JsonElement element = map.get(key);
+        if (null == element || element instanceof JsonNull) {
+            return null;
+        }
+        return element.getAsInt();
     }
 
     /* Msgpack processing */

@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -74,6 +76,28 @@ public class HttpUtils {
         try {
             return new URL(url);
         } catch (MalformedURLException e) {
+            throw AblyException.fromThrowable(e);
+        }
+    }
+
+    /**
+     * Removes querystring from given url string and returns the url string without query string(s)
+     * @param url Url string that needs querystring part removed
+     *
+     * @return  Url string with query string part removed, if existed in the first place
+     *
+     * @throws AblyException  built from URISyntaxException if java.net.URI fails to build
+     * the URI given url
+     * */
+    public static String urlWithQueryStringRemoved(String url) throws AblyException {
+        try {
+            final URI uri = new URI(url);
+            return new URI(uri.getScheme(),
+                uri.getAuthority(),
+                uri.getPath(),
+                null, // Ignore the query part of the input url
+                uri.getFragment()).toString();
+        } catch (URISyntaxException e) {
             throw AblyException.fromThrowable(e);
         }
     }
@@ -163,18 +187,12 @@ public class HttpUtils {
         return builder.toString();
     }
 
-    private static void appendParams(StringBuilder uri, Param[] params) {
-        if(params != null && params.length > 0) {
-            uri.append('?').append(params[0].key).append('=').append(params[0].value);
-            for(int i = 1; i < params.length; i++) {
-                uri.append('&').append(params[i].key).append('=').append(params[i].value);
-            }
-        }
-    }
-
     static URL buildURL(String scheme, String host, int port, String path, Param[] params) {
-        StringBuilder builder = new StringBuilder(scheme).append(host).append(':').append(port).append(path);
-        appendParams(builder, params);
+        StringBuilder builder = new StringBuilder(scheme)
+            .append(host)
+            .append(':')
+            .append(port)
+            .append(HttpUtils.encodeParams(path, params));
 
         URL result = null;
         try {
@@ -184,12 +202,9 @@ public class HttpUtils {
     }
 
     static URL buildURL(String uri, Param[] params) {
-        StringBuilder builder = new StringBuilder(uri);
-        appendParams(builder, params);
-
         URL result = null;
         try {
-            result = new URL(builder.toString());
+            result = new URL(HttpUtils.encodeParams(uri, params));
         } catch (MalformedURLException e) {}
         return result;
     }

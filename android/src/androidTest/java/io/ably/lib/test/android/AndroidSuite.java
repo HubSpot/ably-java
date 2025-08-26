@@ -3,7 +3,6 @@ package io.ably.lib.test.android;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runners.JUnit4;
 
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
@@ -64,7 +63,7 @@ public class AndroidSuite {
             Map<String, String> headers = server.getHeaders();
 
             assertNotNull("Verify ably server was reached", headers);
-            String header = headers.get(Defaults.ABLY_LIB_HEADER.toLowerCase());
+            String header = headers.get(Defaults.ABLY_AGENT_HEADER.toLowerCase(Locale.ROOT));
             assertTrue("Verify correct library header was passed to the server", header != null && header.startsWith("android"));
         }
         catch (AblyException e) {

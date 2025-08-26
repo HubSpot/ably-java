@@ -3,7 +3,9 @@ package io.ably.lib.test.rest;
 import fi.iki.elonen.NanoHTTPD;
 import io.ably.lib.rest.AblyRest;
 import io.ably.lib.test.common.ParameterizedTest;
-import io.ably.lib.types.*;
+import io.ably.lib.types.AblyException;
+import io.ably.lib.types.ClientOptions;
+import io.ably.lib.types.Param;
 import io.ably.lib.util.Log;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -14,8 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Vector;
 
-import static io.ably.lib.http.HttpUtils.encodeURIComponent;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
 public class RestErrorTest extends ParameterizedTest {
 
@@ -64,7 +65,7 @@ public class RestErrorTest extends ParameterizedTest {
             AblyRest ably = new AblyRest(opts);
 
             /* make a call that will generate an error */
-            ably.stats(new Param[]{new Param("message", encodeURIComponent("Test message")), new Param("href", href(12345))});
+            ably.stats(new Param[]{new Param("message", "Test message"), new Param("href", href(12345))});
         } catch (AblyException e) {
             /* verify that the expected error message is present */
             assertTrue(logMessages.get(0).contains(href(12345)));
@@ -93,7 +94,7 @@ public class RestErrorTest extends ParameterizedTest {
             AblyRest ably = new AblyRest(opts);
 
             /* make a call that will generate an error */
-            ably.stats(new Param[]{new Param("message", encodeURIComponent("Test message. See " + href(12345)))});
+            ably.stats(new Param[]{new Param("message", "Test message. See " + href(12345))});
         } catch (AblyException e) {
             /* verify that the expected error message is present */
             assertTrue(logMessages.get(0).contains(href(12345)));
@@ -122,7 +123,7 @@ public class RestErrorTest extends ParameterizedTest {
             AblyRest ably = new AblyRest(opts);
 
             /* make a call that will generate an error */
-            ably.stats(new Param[]{new Param("message", encodeURIComponent("Test message")), new Param("code", "12345")});
+            ably.stats(new Param[]{new Param("message", "Test message"), new Param("code", "12345")});
         } catch (AblyException e) {
             /* verify that the expected error message is present */
             assertTrue(logMessages.get(0).contains(href(12345)));
@@ -136,7 +137,7 @@ public class RestErrorTest extends ParameterizedTest {
         Map<String, String> requestHeaders;
         Map<String, String> requestParams;
 
-        public SessionHandlerNanoHTTPD(int port) {
+        SessionHandlerNanoHTTPD(int port) {
             super(port);
         }
 
